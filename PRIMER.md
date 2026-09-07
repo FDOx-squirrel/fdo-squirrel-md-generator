@@ -105,8 +105,8 @@ zip -r bundle.zip PRIMER.md main.py py/ site/ schemas/ README.md CITATION.cff re
 | S2 | `site/index.html` + `app.css`: Formular für alle `MD.cff`-Felder, zweispaltiges Layout | **im Browser bestätigt** (2026-09-07, Govan-2-Test) |
 | S3 | `site/app.js`: State, Live-Validierung gegen `MD.cff-schema.yaml`, YAML-Export | **im Browser bestätigt** (2026-09-07) |
 | S4 | Round-Trip-Laden (Drag&Drop `MD.cff`/YAML → Formular) | **im Browser bestätigt** (2026-09-07) |
-| S5 | ZIP-Struktur-Validator (Drag&Drop `.zip`) | umgesetzt, **Browser-Verifikation aussteht** (noch kein ZIP getestet, nur `MD.cff` direkt) |
-| S6 | Karte (Spatial Extent: Punkt + Bounding Box) | Bug gemeldet + gefixt (A6), **erneute Browser-Verifikation aussteht** |
+| S5 | ZIP-Struktur-Validator (Drag&Drop `.zip`) | **im Browser bestätigt** (2026-09-07, echtes `fdo-3d-packager`-Bundle mit 30 Dateien, alle korrekt klassifiziert, "Load into form" funktioniert — siehe A10) |
+| S6 | Karte (Spatial Extent: Punkt + Bounding Box) | **im Browser bestätigt** (2026-09-07, nach vier Fixrunden A6–A10: Icon-Fix, Weltkarte-Default, Rectangle-Drag, Punkt/Bbox-exklusiv, Wikidata-/OSM-Lookup inkl. Bbox — Testidentifier u.a. `way/49859412`, `Q662258`) |
 | S7 | CITATION.cff-Ableitung für `fdo:3DDataFDO` | **im Browser bestätigt** (2026-09-07) |
 | S8 | RSE-Compliance (README/LICENSE/CITATION.cff/.gitignore/requirements.txt) | erledigt (2026-09-07) |
 
@@ -124,7 +124,10 @@ das tatsächliche Aussehen. Nach dem ersten `python main.py` bitte
 `python -m http.server 8000 --directory docs` und `http://localhost:8000/`
 im echten Browser öffnen, bevor S2–S7 als "erledigt" gelten (Prinzip aus
 `fdo-3d-packager`s PRIMER: "Eine Seite ist erst bewiesen, wenn ein Browser
-sie gerendert hat").
+sie gerendert hat"). **Stand 2026-09-07 (A10):** genau das ist seither
+passiert — S2–S8 sind alle im echten Browser bestätigt, dieser Absatz
+bleibt als Beleg für die Methode stehen (was hier in der Sandbox ging und
+was nicht), nicht mehr als offener Punkt.
 
 ## Teil C — Schritte im Detail
 
@@ -365,8 +368,8 @@ eindeutig):
   Stand ("Decisions done, no code yet") — Update lebt in einem anderen
   Repo, hier nur vermerkt statt im selben Patch mitgeliefert (Konvention:
   ein Repo pro Chat/Patch).
-- **Browser-Verifikation** (Teil B) ist der wichtigste offene Punkt vor
-  einem echten Release.
+- **Browser-Verifikation** — abgeschlossen (siehe A6–A10, Teil B). Kein
+  offener Punkt mehr.
 - **Chronontology-API für Temporal** (Flos Idee, A8): Periodennamen gegen
   https://chronontology.dainst.org/api/data/period/search auflösen, um
   `start`/`end`/`range` vorzuschlagen. Schwieriger als der Spatial-Fall
