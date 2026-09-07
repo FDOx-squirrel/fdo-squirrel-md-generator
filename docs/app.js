@@ -155,9 +155,17 @@ function looksLikeSpdx(v) {
 function normalizeEntityId(raw) {
   const v = (raw || '').trim();
   if (!v) return v;
-  if (/^Q[1-9]\d*$/.test(v)) return `https://www.wikidata.org/wiki/${v}`;
+  // http (not https), and Wikidata's canonical Linked-Data entity
+  // namespace (/entity/, not the human-readable /wiki/ page) -- feedback
+  // 2026-09-07: matches the URI form already used elsewhere in the
+  // family's data, and is the actual RDF resource URI (the `wd:` prefix
+  // in Wikidata's own ontology is http://www.wikidata.org/entity/).
+  // These are never fetched by this page (just written into the YAML),
+  // so http vs. https here has no mixed-content implication, unlike the
+  // CDN/tile/schema URLs elsewhere, which must stay https.
+  if (/^Q[1-9]\d*$/.test(v)) return `http://www.wikidata.org/entity/${v}`;
   const osm = v.match(/^(node|way|relation)\/(\d+)$/i);
-  if (osm) return `https://www.openstreetmap.org/${osm[1].toLowerCase()}/${osm[2]}`;
+  if (osm) return `http://www.openstreetmap.org/${osm[1].toLowerCase()}/${osm[2]}`;
   return v;
 }
 
@@ -645,7 +653,18 @@ function wireSpatialFields() {
 // on every keystroke/blur while someone is still typing an id would be
 // both wasteful and a surprise, given this page otherwise only contacts
 // the network for things the person explicitly asked for.
+// A request-sequencing token: if the identifier is changed and looked up
+// again before the first lookup's response arrives, the two fetches can
+// resolve in either order. Without this guard, an in-flight first
+// response arriving *after* a second, newer one would silently overwrite
+// the newer (correct) result with the stale one -- feedback 2026-09-07
+// ("replacing the identifier and querying again keeps the previous
+// result"). Every call gets its own token; a response is only applied if
+// no newer lookup has started since.
+let coordLookupToken = 0;
+
 async function lookupSpatialCoordinates() {
+  const myToken = ++coordLookupToken;
   const idEl = document.getElementById('field-spatial-id');
   const statusEl = document.getElementById('spatial-id-lookup-status');
   const ref = parseWikidataOrOsmRef(idEl.value);
@@ -659,9 +678,11 @@ async function lookupSpatialCoordinates() {
   try {
     if (ref.kind === 'wikidata') {
       const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ref.id}&props=claims&format=json&origin=*`;
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: 'no-store' });
+      if (myToken !== coordLookupToken) return; // superseded by a newer lookup, discard
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (myToken !== coordLookupToken) return;
       const entity = data.entities && data.entities[ref.id];
       const claim = entity && entity.claims && entity.claims.P625 && entity.claims.P625[0];
       const coord = claim && claim.mainsnak && claim.mainsnak.datavalue && claim.mainsnak.datavalue.value;
@@ -677,9 +698,11 @@ async function lookupSpatialCoordinates() {
     } else {
       const prefix = { node: 'N', way: 'W', relation: 'R' }[ref.type];
       const url = `https://nominatim.openstreetmap.org/lookup?osm_ids=${prefix}${ref.id}&format=jsonv2`;
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: 'no-store' });
+      if (myToken !== coordLookupToken) return;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const results = await res.json();
+      if (myToken !== coordLookupToken) return;
       const hit = results && results[0];
       if (!hit) throw new Error(`OpenStreetMap ${ref.type}/${ref.id} not found via Nominatim.`);
       ensureSpatial();
@@ -704,6 +727,7 @@ async function lookupSpatialCoordinates() {
     }
     scheduleValidate(); scheduleAutosave();
   } catch (err) {
+    if (myToken !== coordLookupToken) return; // a newer lookup is already in flight/done, don't show this one's error over it
     statusEl.textContent = `Lookup failed: ${err.message}`;
     statusEl.className = 'hint warn-item';
   }

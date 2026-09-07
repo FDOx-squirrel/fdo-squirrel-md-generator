@@ -292,6 +292,34 @@ eindeutig):
   mit Namensmehrdeutigkeit und uneinheitlichen Datumskonventionen
   (BCE/CE, Kalenderreform-Fragen). Als Teil-D-Punkt vorgemerkt.
 
+### A9 Nachtrag 2026-09-07, vierte Runde (URI-Form + Race Condition)
+
+- **`normalizeEntityId()`-Ausgabeformat korrigiert.** Ergab bisher
+  `https://www.wikidata.org/wiki/Q42` (Wiki-Seiten-URL) — Flo nutzt
+  bereits durchgängig `http://www.wikidata.org/entity/Q42` (die
+  kanonische Linked-Data-Entity-URI, `wd:`-Namensraum in Wikidatas eigener
+  RDF-Ontologie) in bestehenden Daten, sichtbar im Export-Preview als
+  Bruch zwischen alten und neu getippten Werten. Jetzt: `http://` (nicht
+  `https://`) und `/entity/` (nicht `/wiki/`) für Wikidata; `http://`
+  auch für OSM. Betrifft nur die generierten Entity-URIs (werden nie vom
+  Browser gefetcht, reine YAML-Strings) — CDN-/Kachel-/Schema-URLs bleiben
+  zwingend `https://` (GitHub Pages liefert über https, Mixed-Content-
+  Blocking würde `http://`-Subresourcen sonst verwerfen).
+  `shortenEntityId()` erkannte `/entity/` und `/wiki/` sowie http/https
+  schon vorher beide (keine Änderung nötig).
+- **Race Condition beim Koordinaten-Lookup behoben.** Gemeldet: Identifier
+  ersetzen und erneut "look up coordinates" klicken behielt das Ergebnis
+  der vorherigen Abfrage. Plausibelste Ursache: zwei sich überlappende
+  Fetches (die zweite Anfrage gestartet, bevor die erste Antwort da war)
+  können in beliebiger Reihenfolge auflösen — kam die erste (veraltete)
+  Antwort NACH der zweiten (aktuellen) zurück, überschrieb sie sie
+  stillschweigend. Fix: `coordLookupToken`-Zähler, jede Anfrage merkt sich
+  ihren eigenen Token beim Start, wendet ihr Ergebnis nur an, wenn seitdem
+  keine neuere Anfrage losgeschickt wurde (nach jedem `await` geprüft,
+  Erfolgs- und Fehlerpfad). Zusätzlich `cache: 'no-store'` auf beide
+  Lookup-Fetches (Konsistenz mit den Schema-Fetches, schließt
+  Browser-HTTP-Caching als weitere mögliche Teilursache aus).
+
 ## Teil D — Offene Punkte
 
 - **Tiefes Feld-Highlighting** für Array-Elemente (z. B. `publishers[2].label`)
