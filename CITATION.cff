@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "fdo-squirrel-md-generator"
+message: >-
+  If you use this software, please cite it using the metadata from this
+  file.
+type: software
+authors:
+  - given-names: Florian
+    family-names: Thiery
+    affiliation: Research Squirrel Engineers Network
+    orcid: "https://orcid.org/0000-0002-3246-3531"
+repository-code: "https://github.com/FDOx-squirrel/fdo-squirrel-md-generator"
+abstract: >-
+  A static, browser-only MD.cff / CITATION.cff editor for the FDOx-squirrel
+  family: builds a new MD.cff against fdo-squirrel's live schema, loads an
+  existing MD.cff or a whole FDOx bundle .zip back in for editing, and
+  runs a structural pre-check (schema validity, expected files, checksums)
+  on ZIP bundles -- entirely client-side, deployed on GitHub Pages.
+keywords:
+  - FAIR Digital Object
+  - metadata
+  - CITATION.cff
+  - JSON Schema
+  - cultural heritage
+license: MIT
+version: v0.1.0
+date-released: "2026-09-07"
+# doi: "10.5281/zenodo.XXXXXXX"  # TODO: add Zenodo DOI once minted

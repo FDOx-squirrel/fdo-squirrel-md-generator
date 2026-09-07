@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MD.cff Initializer — FDOx-squirrel</title>
+<meta name="description" content="Create, load and fix MD.cff / CITATION.cff files for FAIR Digital Objects in the FDOx-squirrel family, validated live against fdo-squirrel's schema — runs entirely in your browser.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="mark" href="#top" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="30" height="30" role="img" aria-label="FDOx-squirrel">
+        <path d="M6 24c0-7 5-13 12-13 5 0 9 3 9 7 0 3-2 5-5 5-2 0-3-1-3-3 0-1 1-2 2-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="23" cy="10" r="1.6" fill="currentColor"/>
+        <path d="M6 24c-1.5 1.5-2 3-2 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </a>
+    <div>
+      <h1>MD.cff Initializer</h1>
+      <p class="tagline">Build, load and fix <code>MD.cff</code> for the FDOx-squirrel family — entirely in this page, nothing leaves your browser except the schema fetch below.</p>
+    </div>
+    <nav class="header-links">
+      <a href="https://github.com/FDOx-squirrel/fdo-squirrel-md-generator" target="_blank" rel="noopener">Repo</a>
+      <a href="https://github.com/FDOx-squirrel/fdo-squirrel" target="_blank" rel="noopener">fdo-squirrel</a>
+      <a href="https://github.com/FDOx-squirrel/fdo-architecture" target="_blank" rel="noopener">Architecture</a>
+    </nav>
+  </div>
+</header>
+
+<div id="schema-banner" class="banner banner-pending" role="status" aria-live="polite">
+  Loading <code>MD.cff-schema.yaml</code> from fdo-squirrel…
+</div>
+
+<main class="wrap" id="top">
+
+  <section id="dropzone" class="dropzone" aria-label="Load an existing file">
+    <div class="dropzone-inner">
+      <p class="dropzone-title">Drop an <strong>MD.cff</strong> or an FDOx <strong>bundle .zip</strong> here</p>
+      <p class="dropzone-hint">…to load it into the form below for editing, or to check it against this tool's structural checks — e.g. straight out of <code>fdo-3d-packager</code>'s <code>dist/&lt;slug&gt;/MD.cff</code> or <code>dist/&lt;slug&gt;.zip</code>.</p>
+      <label class="file-picker">
+        <span>or choose a file…</span>
+        <input type="file" id="file-input" accept=".yaml,.yml,.cff,.zip">
+      </label>
+    </div>
+  </section>
+
+  <div id="load-report" class="report" hidden></div>
+  <div id="zip-report" class="report" hidden></div>
+
+  <div class="layout">
+    <nav class="section-nav" aria-label="Jump to section">
+      <a href="#section-core">Core</a>
+      <a href="#section-about">Version &amp; dates</a>
+      <a href="#section-people">People &amp; rights</a>
+      <a href="#section-identifiers">Identifiers</a>
+      <a href="#section-relations">Related resources</a>
+      <a href="#section-spatial">Spatial</a>
+      <a href="#section-temporal">Temporal</a>
+      <a href="#section-heritage">Heritage object</a>
+      <a href="#section-technique">Technique</a>
+      <a href="#section-distributions">Distributions</a>
+    </nav>
+
+    <form id="mdcff-form" novalidate>
+
+      <section id="section-core" class="field-section">
+        <h2>Core <span class="required-flag">required</span></h2>
+
+        <div class="field">
+          <label for="field-fdo_type">FDO type</label>
+          <select id="field-fdo_type" required>
+            <option value="" disabled selected>choose…</option>
+            <option value="fdo:SoftwareFDO">fdo:SoftwareFDO</option>
+            <option value="fdo:AnalysisFDO">fdo:AnalysisFDO</option>
+            <option value="fdo:3DDataFDO">fdo:3DDataFDO</option>
+            <option value="fdo:RegistryFDO">fdo:RegistryFDO</option>
+          </select>
+          <p class="hint">Also decides which files get which role when <code>fdo-squirrel</code> classifies a package's contents, and (below) whether a <code>CITATION.cff</code> gets derived automatically.</p>
+        </div>
+
+        <div class="field">
+          <label for="field-id">Identifier</label>
+          <input type="text" id="field-id" placeholder="https://doi.org/10.5281/zenodo.1234567" required>
+          <p class="hint">A global identifier for the described resource — prefer a resolvable DOI/ARK/Handle URL. <code>fdo-3d-packager</code> ships a fixed placeholder here until a Zenodo DOI exists; that placeholder text will fail this form's validation on purpose.</p>
+        </div>
+
+        <div class="field">
+          <label for="field-title">Title</label>
+          <input type="text" id="field-title" required>
+        </div>
+
+        <div class="field">
+          <label for="field-description">Description</label>
+          <textarea id="field-description" rows="4" required></textarea>
+        </div>
+      </section>
+
+      <section id="section-about" class="field-section">
+        <h2>Version &amp; dates</h2>
+
+        <div class="field">
+          <label for="field-version">Version</label>
+          <input type="text" id="field-version" placeholder="1.0.0">
+          <p class="hint">Human-readable version of the described object — not the MD.cff schema version.</p>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="field-date_created">Date created</label>
+            <input type="date" id="field-date_created">
+          </div>
+          <div class="field">
+            <label for="field-date_released">Date released</label>
+            <input type="date" id="field-date_released">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Modification dates</label>
+          <div class="string-list" data-key="date_modified" data-item-type="date"></div>
+          <button type="button" class="add-btn" data-add="date_modified">+ add date</button>
+        </div>
+
+        <div class="field">
+          <label>Funding statements</label>
+          <div class="string-list" data-key="funding" data-item-type="text"></div>
+          <button type="button" class="add-btn" data-add="funding">+ add funding statement</button>
+        </div>
+      </section>
+
+      <section id="section-people" class="field-section">
+        <h2>People &amp; rights</h2>
+
+        <div class="field">
+          <label>Publishers <span class="required-flag">required, at least one</span></label>
+          <p class="hint">The publishing agent(s), e.g. your institution or the network account you release under.</p>
+          <div class="entity-list" data-key="publishers"></div>
+          <button type="button" class="add-btn" data-add="publishers">+ add publisher</button>
+        </div>
+
+        <div class="field">
+          <label>Creators</label>
+          <div class="entity-list" data-key="creators"></div>
+          <button type="button" class="add-btn" data-add="creators">+ add creator</button>
+        </div>
+
+        <div class="field">
+          <label>Contributors</label>
+          <div class="entity-list" data-key="contributors"></div>
+          <button type="button" class="add-btn" data-add="contributors">+ add contributor</button>
+        </div>
+
+        <div class="field">
+          <label>License</label>
+          <p class="hint">Label ideally an SPDX id (e.g. <code>CC-BY-4.0</code>); identifier optionally the SPDX/license URL.</p>
+          <div class="entity-single" data-key="license"></div>
+        </div>
+
+        <div class="field">
+          <label>Keywords</label>
+          <div class="entity-list" data-key="keywords"></div>
+          <button type="button" class="add-btn" data-add="keywords">+ add keyword</button>
+        </div>
+      </section>
+
+      <section id="section-identifiers" class="field-section">
+        <h2>Identifiers</h2>
+        <p class="hint">Additional identifiers beyond the primary one above. Only <code>scheme: doi</code> and values that already start with <code>http(s)://</code> become clickable IRIs downstream — the others (<code>orcid</code>, <code>ror</code>, <code>handle</code>, <code>ark</code>, <code>isbn</code>, <code>issn</code>, <code>swhid</code>, <code>other</code>) are kept as literal strings by <code>fdo-squirrel</code>, on purpose.</p>
+        <div class="identifier-list" data-key="identifiers"></div>
+        <button type="button" class="add-btn" data-add="identifiers">+ add identifier</button>
+      </section>
+
+      <section id="section-relations" class="field-section">
+        <h2>Related resources</h2>
+        <div class="related-list" data-key="related_resources"></div>
+        <button type="button" class="add-btn" data-add="related_resources">+ add related resource</button>
+      </section>
+
+      <section id="section-spatial" class="field-section">
+        <h2>Spatial extent</h2>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-spatial">
+          This resource has a spatial extent
+        </label>
+
+        <div id="spatial-fields" class="composite" hidden>
+          <div class="field-row">
+            <div class="field">
+              <label for="field-spatial-label">Label <span class="required-flag">required</span></label>
+              <input type="text" id="field-spatial-label" placeholder="e.g. Donaghmore Church, Co. Kildare">
+            </div>
+            <div class="field">
+              <label for="field-spatial-id">Identifier</label>
+              <input type="text" id="field-spatial-id" placeholder="Wikidata / Geonames URI">
+            </div>
+          </div>
+
+          <div id="map-spatial" class="map"></div>
+          <p class="hint">Click the map to set the point (<code>lat</code>/<code>lon</code>). To set the bounding box instead, press "draw bounding box" below, then click two opposite corners — or just type the numbers directly. The map needs an internet connection to load its tiles even once this page is saved offline.</p>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="field-spatial-lat">Latitude</label>
+              <input type="number" step="any" id="field-spatial-lat">
+            </div>
+            <div class="field">
+              <label for="field-spatial-lon">Longitude</label>
+              <input type="number" step="any" id="field-spatial-lon">
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Bounding box (west, south, east, north — WGS84)</label>
+            <div class="field-row bbox-row">
+              <input type="number" step="any" id="field-spatial-bbox-w" placeholder="west" aria-label="West">
+              <input type="number" step="any" id="field-spatial-bbox-s" placeholder="south" aria-label="South">
+              <input type="number" step="any" id="field-spatial-bbox-e" placeholder="east" aria-label="East">
+              <input type="number" step="any" id="field-spatial-bbox-n" placeholder="north" aria-label="North">
+            </div>
+            <button type="button" id="bbox-draw-toggle" class="add-btn">draw bounding box on map…</button>
+            <button type="button" id="bbox-clear" class="add-btn">clear bounding box</button>
+          </div>
+
+          <details>
+            <summary>Advanced: WKT geometry</summary>
+            <div class="field">
+              <label for="field-spatial-wkt">WKT (EPSG:4326, no CRS prefix)</label>
+              <textarea id="field-spatial-wkt" rows="2" placeholder="POLYGON((...))"></textarea>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section id="section-temporal" class="field-section">
+        <h2>Temporal extent</h2>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-temporal">
+          This resource has a temporal extent
+        </label>
+
+        <div id="temporal-fields" class="composite" hidden>
+          <div class="field-row">
+            <div class="field">
+              <label for="field-temporal-label">Label <span class="required-flag">required</span></label>
+              <input type="text" id="field-temporal-label" placeholder="e.g. Early medieval period">
+            </div>
+            <div class="field">
+              <label for="field-temporal-id">Identifier</label>
+              <input type="text" id="field-temporal-id">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="field-temporal-start">Start (year, negative = BCE)</label>
+              <input type="number" step="1" id="field-temporal-start">
+            </div>
+            <div class="field">
+              <label for="field-temporal-end">End (year)</label>
+              <input type="number" step="1" id="field-temporal-end">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="field-temporal-range-a">Range from</label>
+              <input type="number" step="1" id="field-temporal-range-a">
+            </div>
+            <div class="field">
+              <label for="field-temporal-range-b">Range to</label>
+              <input type="number" step="1" id="field-temporal-range-b">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="section-heritage" class="field-section">
+        <h2>Heritage object</h2>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-heritage">
+          This resource describes a heritage object
+        </label>
+
+        <div id="heritage-fields" class="composite" hidden>
+          <div class="field">
+            <label>Object type</label>
+            <div class="entity-single" data-key="heritage_object.object_type"></div>
+          </div>
+          <div class="field">
+            <label>Monument</label>
+            <div class="entity-single" data-key="heritage_object.monument"></div>
+          </div>
+          <div class="field">
+            <label>Material</label>
+            <div class="entity-single" data-key="heritage_object.material"></div>
+          </div>
+          <div class="field">
+            <label for="field-heritage-context">Context</label>
+            <textarea id="field-heritage-context" rows="2"></textarea>
+          </div>
+          <div class="field">
+            <label for="field-heritage-purpose">Documentation purpose</label>
+            <textarea id="field-heritage-purpose" rows="2"></textarea>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="field-heritage-condition">Overall condition</label>
+              <input type="text" id="field-heritage-condition">
+            </div>
+            <div class="field">
+              <label for="field-heritage-urgency">Conservation urgency</label>
+              <input type="text" id="field-heritage-urgency">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="section-technique" class="field-section">
+        <h2>Technique</h2>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-technique">
+          Describe acquisition / processing technique
+        </label>
+
+        <div id="technique-fields" class="composite" hidden>
+          <h3>Acquisition</h3>
+          <div class="field-row">
+            <div class="field">
+              <label for="field-tech-acq-method">Method</label>
+              <input type="text" id="field-tech-acq-method" placeholder="e.g. photogrammetry, 180 photos">
+            </div>
+            <div class="field">
+              <label for="field-tech-acq-hardware">Hardware</label>
+              <input type="text" id="field-tech-acq-hardware">
+            </div>
+            <div class="field">
+              <label for="field-tech-acq-images">Image count</label>
+              <input type="text" id="field-tech-acq-images">
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="field-tech-processing">Processing notes</label>
+            <textarea id="field-tech-processing" rows="2"></textarea>
+          </div>
+
+          <div class="field">
+            <label>Programming languages</label>
+            <div class="string-list" data-key="technique.programming_languages" data-item-type="text"></div>
+            <button type="button" class="add-btn" data-add="technique.programming_languages">+ add language</button>
+          </div>
+
+          <h3>Repository</h3>
+          <div class="field-row">
+            <div class="field">
+              <label for="field-tech-repo-type">Type</label>
+              <input type="text" id="field-tech-repo-type" placeholder="git">
+            </div>
+            <div class="field">
+              <label for="field-tech-repo-url">URL</label>
+              <input type="text" id="field-tech-repo-url">
+            </div>
+            <div class="field">
+              <label for="field-tech-repo-status">Development status</label>
+              <input type="text" id="field-tech-repo-status">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="section-distributions" class="field-section">
+        <h2>Distributions <span class="advanced-flag">advanced</span></h2>
+        <p class="hint">Usually left empty on purpose — <code>fdo-squirrel</code> computes distributions from a package's actual ZIP contents rather than reading them from <code>MD.cff</code>. This raw field exists only so that loading an <code>MD.cff</code> which already has a <code>distributions</code> list (e.g. from another producer) doesn't silently lose it — edit as YAML, a list of <code>{id, label, media_type?, checksum?}</code>.</p>
+        <textarea id="field-distributions-raw" rows="4" class="raw-yaml" placeholder="- id: model.nxz&#10;  label: Compressed Nexus mesh"></textarea>
+      </section>
+
+    </form>
+
+    <aside class="preview-pane">
+      <div class="preview-sticky">
+        <h2>Validation</h2>
+        <div id="validation-report" class="validation-report">
+          <p class="muted">Waiting for the schema…</p>
+        </div>
+
+        <h2>MD.cff preview</h2>
+        <pre id="yaml-preview" class="yaml-preview"></pre>
+        <button type="button" id="download-mdcff" class="primary-btn">Download MD.cff</button>
+
+        <div id="citation-block" hidden>
+          <h2>CITATION.cff <span class="advanced-flag">derived</span></h2>
+          <p class="hint">Auto-derived for <code>fdo:3DDataFDO</code> from the fields above (PRIMER.md S7) — authors always as CFF <em>entity</em>, never a guessed person name split.</p>
+          <pre id="citation-preview" class="yaml-preview"></pre>
+          <p id="citation-status" class="hint"></p>
+          <button type="button" id="download-citation" class="primary-btn">Download CITATION.cff</button>
+        </div>
+
+        <button type="button" id="reset-form" class="ghost-btn">Clear form</button>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>Part of the <a href="https://github.com/FDOx-squirrel/fdo-architecture" target="_blank" rel="noopener">FDOx-squirrel</a> family. MIT licensed. No data ever leaves this page except the two fetches named in the schema banner above.</p>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.2/dist/js-yaml.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

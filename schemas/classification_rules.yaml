@@ -1,0 +1,155 @@
+# Vendored copy -- do not edit by hand.
+#
+# Source: https://github.com/FDOx-squirrel/fdo-squirrel/blob/master/fdo/classification_rules.yaml
+# Pinned at commit 504b7af57423586920fc4cf5c56334fe6829beb5 (2026-09-04),
+# same commit fdo-3d-packager's own vendored MD.cff-schema.yaml copy cites.
+# Used client-side (docs/app.js) only for advisory role labels in the ZIP
+# validator's file report -- fdo-squirrel's real classification (the one
+# that actually drives its RDF output) runs server-side in fdo-squirrel
+# itself; a mismatch here is a labelling nuisance in this tool, not a data
+# error. Reuse = copying (PRIMER.md A3): this is a small, comparatively
+# stable rules file, unlike MD.cff's schema (the one deliberate live-fetch
+# exception, see py/md_generator_utils.py).
+#
+# ============================================================
+# classification_rules.yaml
+#
+# Heuristic classification rules for FDO distributions
+# Version: 0.1
+# ============================================================
+
+version: "0.1"
+
+fdo_classes:
+  fdo:SoftwareFDO:
+    default_role: software
+    rules:
+      - match:
+          extension: [".py", ".r", ".js", ".java"]
+        role: script
+
+      - match:
+          filename: ["setup.py", "pyproject.toml", "requirements.txt"]
+        role: configuration
+
+      - match:
+          extension: [".exe", ".jar", ".bin"]
+        role: software
+
+      - match:
+          filename_prefix: ["README"]
+          extension: [".md", ".rst", ".txt"]
+        role: documentation
+
+      - match:
+          filename: ["MD.cff", "CITATION.cff"]
+        role: metadata
+
+      - match:
+          path_prefix: ["tests/"]
+        role: auxiliary
+
+  fdo:AnalysisFDO:
+    default_role: data
+    rules:
+      - match:
+          extension: [".ipynb"]
+        role: script
+
+      - match:
+          extension: [".py", ".r"]
+        role: script
+
+      - match:
+          extension: [".csv", ".tsv", ".parquet", ".json"]
+        role: data
+
+      - match:
+          path_prefix: ["results/"]
+        role: result
+
+      - match:
+          extension: [".png", ".jpg", ".pdf"]
+        role: result
+
+      - match:
+          filename_prefix: ["README"]
+          extension: [".md", ".txt"]
+        role: documentation
+
+      - match:
+          filename: ["MD.cff", "CITATION.cff"]
+        role: metadata
+
+  fdo:3DDataFDO:
+    default_role: data
+    rules:
+      - match:
+          extension:
+            [
+              ".obj",
+              ".ply",
+              ".stl",
+              ".glb",
+              ".gltf",
+              ".nxs",
+              ".nxz",
+              ".xyz",
+              ".pts",
+              ".ptx",
+              ".dae",
+            ]
+        role: model
+
+      - match:
+          extension:
+            [
+              ".jpg",
+              ".jpeg",
+              ".png",
+              ".tif",
+              ".tiff",
+              ".pdf",
+              ".csv",
+              ".xml",
+              ".json",
+            ]
+        role: documentation
+
+      - match:
+          extension: [".las", ".laz"]
+        role: data
+
+      - match:
+          path_prefix: ["textures/"]
+        role: auxiliary
+
+      - match:
+          filename_prefix: ["README"]
+          extension: [".md", ".txt"]
+        role: documentation
+
+      - match:
+          filename: ["MD.cff", "CITATION.cff"]
+        role: metadata
+
+  fdo:RegistryFDO:
+    default_role: data
+    rules:
+      - match:
+          filename_prefix: ["shapes"]
+          extension: [".ttl"]
+        role: metadata
+
+      - match:
+          filename: ["MD.cff", "CITATION.cff"]
+        role: metadata
+
+      - match:
+          filename_prefix: ["README"]
+          extension: [".md", ".txt"]
+        role: documentation
+
+      - match:
+          extension: [".ttl", ".nt", ".jsonld", ".json"]
+        role: data

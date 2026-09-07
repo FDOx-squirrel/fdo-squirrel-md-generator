@@ -1,0 +1,7 @@
+# Only needed to run `python main.py` (renders docs/config.js and copies
+# site/+schemas/ into docs/ -- see PRIMER.md A2). The page itself has zero
+# Python/server dependency once docs/ is built; everything there runs in
+# the browser (see site/index.html's CDN <script> tags for its own,
+# separate dependency set).
+jinja2>=3.1,<4
+pyyaml>=6.0,<7
