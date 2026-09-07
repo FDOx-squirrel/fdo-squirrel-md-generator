@@ -144,11 +144,14 @@ function looksLikeSpdx(v) {
 }
 
 // Shorthand recognition for `id` fields throughout the form: a bare
-// Wikidata QID or an OSM "node/way/relation/<id>" reference gets expanded
-// into its full URI. Applied on blur (not on every keystroke) so it
-// doesn't fight typing, in wireIdNormalize() below. Anything else is left
-// untouched -- this only ever adds a scheme+host, never rewrites or
-// "corrects" something that isn't one of these two exact shapes.
+// Wikidata QID or an OSM "node/way/relation/<id>" reference is expanded
+// into its full URI, but ONLY at export time (in clean*() below) -- the
+// form field itself always keeps showing exactly what was typed/loaded
+// (feedback 2026-09-07: the earlier version rewrote the visible input on
+// blur, which was unwanted -- the short form should stay visible, only
+// the exported file should carry the long form). shortenEntityId() is the
+// reverse, used wherever a stored `id` gets rendered into an input, so a
+// loaded MD.cff's full Wikidata/OSM URL also displays as the short form.
 function normalizeEntityId(raw) {
   const v = (raw || '').trim();
   if (!v) return v;
@@ -158,15 +161,28 @@ function normalizeEntityId(raw) {
   return v;
 }
 
-function wireIdNormalize(inputEl, onCommit) {
-  inputEl.addEventListener('blur', () => {
-    const normalized = normalizeEntityId(inputEl.value);
-    if (normalized !== inputEl.value) {
-      inputEl.value = normalized;
-      onCommit(normalized);
-      scheduleValidate(); scheduleAutosave();
-    }
-  });
+function shortenEntityId(raw) {
+  const v = (raw || '').trim();
+  if (!v) return v;
+  const wd = v.match(/^https?:\/\/(?:www\.)?wikidata\.org\/(?:wiki|entity)\/(Q[1-9]\d*)/i);
+  if (wd) return wd[1];
+  const osm = v.match(/^https?:\/\/(?:www\.)?openstreetmap\.org\/(node|way|relation)\/(\d+)/i);
+  if (osm) return `${osm[1].toLowerCase()}/${osm[2]}`;
+  return v;
+}
+
+// Parses a Wikidata/OSM reference (short or full-URL form) into a
+// structured {kind, id} / {kind, type, id} for the coordinate-lookup
+// feature below -- separate from the two functions above because it needs
+// to recover the *type* (node/way/relation), not just produce a string.
+function parseWikidataOrOsmRef(raw) {
+  const v = (raw || '').trim();
+  if (!v) return null;
+  let m = v.match(/^Q([1-9]\d*)$/) || v.match(/^https?:\/\/(?:www\.)?wikidata\.org\/(?:wiki|entity)\/Q([1-9]\d*)/i);
+  if (m) return { kind: 'wikidata', id: `Q${m[1]}` };
+  m = v.match(/^(node|way|relation)\/(\d+)$/i) || v.match(/^https?:\/\/(?:www\.)?openstreetmap\.org\/(node|way|relation)\/(\d+)/i);
+  if (m) return { kind: 'osm', type: m[1].toLowerCase(), id: m[2] };
+  return null;
 }
 
 async function sha256Hex(bytes) {
@@ -195,7 +211,7 @@ function cleanEntity(e) {
   if (!label) return null;
   const out = { label };
   const id = trimmedOrNull(e.id);
-  if (id) out.id = id;
+  if (id) out.id = normalizeEntityId(id);
   return out;
 }
 
@@ -218,7 +234,7 @@ function cleanSpatial(s) {
   const label = trimmedOrNull(s.label);
   if (!label) return null; // required if the block is present at all
   const out = { label };
-  const id = trimmedOrNull(s.id); if (id) out.id = id;
+  const id = trimmedOrNull(s.id); if (id) out.id = normalizeEntityId(id);
   const wkt = trimmedOrNull(s.wkt); if (wkt) out.wkt = wkt;
   if (s.lat != null && !Number.isNaN(s.lat)) out.lat = s.lat;
   if (s.lon != null && !Number.isNaN(s.lon)) out.lon = s.lon;
@@ -232,7 +248,7 @@ function cleanTemporal(t) {
   const label = trimmedOrNull(t.label);
   if (!label) return null;
   const out = { label };
-  const id = trimmedOrNull(t.id); if (id) out.id = id;
+  const id = trimmedOrNull(t.id); if (id) out.id = normalizeEntityId(id);
   if (t.start != null && !Number.isNaN(t.start)) out.start = t.start;
   if (t.end != null && !Number.isNaN(t.end)) out.end = t.end;
   if (t.range_a != null && t.range_b != null && !Number.isNaN(t.range_a) && !Number.isNaN(t.range_b)) {
@@ -336,12 +352,11 @@ function renderEntityList(key) {
     row.className = 'entity-row';
     row.innerHTML = `
       <input type="text" placeholder="label" value="${escapeAttr(item.label)}">
-      <input type="text" placeholder="id (URI, optional)" value="${escapeAttr(item.id)}">
+      <input type="text" placeholder="id (URI, optional)" value="${escapeAttr(shortenEntityId(item.id))}">
       <button type="button" class="row-remove" aria-label="remove">✕</button>`;
     const [labelInput, idInput] = row.querySelectorAll('input');
     labelInput.addEventListener('input', () => { item.label = labelInput.value; scheduleValidate(); scheduleAutosave(); });
     idInput.addEventListener('input', () => { item.id = idInput.value; scheduleValidate(); scheduleAutosave(); });
-    wireIdNormalize(idInput, v => { item.id = v; });
     row.querySelector('.row-remove').addEventListener('click', () => {
       arr.splice(i, 1); renderEntityList(key); scheduleValidate(); scheduleAutosave();
     });
@@ -362,13 +377,12 @@ function renderEntitySingle(key) {
   container.innerHTML = `
     <div class="entity-row">
       <input type="text" placeholder="label" value="${escapeAttr(item.label)}">
-      <input type="text" placeholder="id (URI, optional)" value="${escapeAttr(item.id)}">
+      <input type="text" placeholder="id (URI, optional)" value="${escapeAttr(shortenEntityId(item.id))}">
       <button type="button" class="row-remove" aria-label="clear">clear</button>
     </div>`;
   const [labelInput, idInput] = container.querySelectorAll('input');
   labelInput.addEventListener('input', () => { item.label = labelInput.value; scheduleValidate(); scheduleAutosave(); });
   idInput.addEventListener('input', () => { item.id = idInput.value; scheduleValidate(); scheduleAutosave(); });
-  wireIdNormalize(idInput, v => { item.id = v; });
   container.querySelector('.row-remove').addEventListener('click', () => {
     item.label = ''; item.id = ''; labelInput.value = ''; idInput.value = '';
     scheduleValidate(); scheduleAutosave();
@@ -435,7 +449,7 @@ function renderRelatedList() {
     row.innerHTML = `
       <select aria-label="relation"><option value="" disabled ${!item.relation ? 'selected' : ''}>relation…</option>${options}</select>
       <input type="text" placeholder="target label" value="${escapeAttr(item.target.label)}">
-      <input type="text" placeholder="target id (optional)" value="${escapeAttr(item.target.id)}">
+      <input type="text" placeholder="target id (optional)" value="${escapeAttr(shortenEntityId(item.target.id))}">
       <input type="text" placeholder="note (optional)" value="${escapeAttr(item.note || '')}">
       <button type="button" class="row-remove" aria-label="remove">✕</button>`;
     const select = row.querySelector('select');
@@ -443,7 +457,6 @@ function renderRelatedList() {
     select.addEventListener('change', () => { item.relation = select.value; scheduleValidate(); scheduleAutosave(); });
     targetLabel.addEventListener('input', () => { item.target.label = targetLabel.value; scheduleValidate(); scheduleAutosave(); });
     targetId.addEventListener('input', () => { item.target.id = targetId.value; scheduleValidate(); scheduleAutosave(); });
-    wireIdNormalize(targetId, v => { item.target.id = v; });
     note.addEventListener('input', () => { item.note = note.value; scheduleValidate(); scheduleAutosave(); });
     row.querySelector('.row-remove').addEventListener('click', () => {
       arr.splice(i, 1); renderRelatedList(); scheduleValidate(); scheduleAutosave();
@@ -483,7 +496,7 @@ function renderCoreFormFromState() {
 function renderSpatialFormFromState() {
   const s = state.spatial || newSpatial();
   document.getElementById('field-spatial-label').value = s.label || '';
-  document.getElementById('field-spatial-id').value = s.id || '';
+  document.getElementById('field-spatial-id').value = shortenEntityId(s.id) || '';
   document.getElementById('field-spatial-wkt').value = s.wkt || '';
   document.getElementById('field-spatial-lat').value = s.lat ?? '';
   document.getElementById('field-spatial-lon').value = s.lon ?? '';
@@ -498,7 +511,7 @@ function renderSpatialFormFromState() {
 function renderTemporalFormFromState() {
   const t = state.temporal || newTemporal();
   document.getElementById('field-temporal-label').value = t.label || '';
-  document.getElementById('field-temporal-id').value = t.id || '';
+  document.getElementById('field-temporal-id').value = shortenEntityId(t.id) || '';
   document.getElementById('field-temporal-start').value = t.start ?? '';
   document.getElementById('field-temporal-end').value = t.end ?? '';
   document.getElementById('field-temporal-range-a').value = t.range_a ?? '';
@@ -585,7 +598,6 @@ function wireSpatialFields() {
       scheduleValidate(); scheduleAutosave();
     });
   });
-  wireIdNormalize(document.getElementById('field-spatial-id'), v => { ensureSpatial().id = v; });
 
   const latEl = document.getElementById('field-spatial-lat');
   const lonEl = document.getElementById('field-spatial-lon');
@@ -621,6 +633,80 @@ function wireSpatialFields() {
     clearMapRectangle();
     scheduleValidate(); scheduleAutosave();
   });
+
+  document.getElementById('spatial-id-lookup').addEventListener('click', lookupSpatialCoordinates);
+}
+
+// Wikidata (P625, "coordinate location") and OpenStreetMap (via Nominatim,
+// which resolves a node/way/relation id to a point + bounding box) both
+// have free, key-less, CORS-enabled lookup APIs -- feedback 2026-09-07:
+// "could entering a QID/OSM reference extract the coordinate automatically?"
+// Deliberately a manual button, not automatic-on-blur: a network request
+// on every keystroke/blur while someone is still typing an id would be
+// both wasteful and a surprise, given this page otherwise only contacts
+// the network for things the person explicitly asked for.
+async function lookupSpatialCoordinates() {
+  const idEl = document.getElementById('field-spatial-id');
+  const statusEl = document.getElementById('spatial-id-lookup-status');
+  const ref = parseWikidataOrOsmRef(idEl.value);
+  if (!ref) {
+    statusEl.textContent = 'Not a recognized Wikidata Q-id or OpenStreetMap node/way/relation reference.';
+    statusEl.className = 'hint warn-item';
+    return;
+  }
+  statusEl.textContent = 'Looking up…';
+  statusEl.className = 'hint muted';
+  try {
+    if (ref.kind === 'wikidata') {
+      const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ref.id}&props=claims&format=json&origin=*`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const entity = data.entities && data.entities[ref.id];
+      const claim = entity && entity.claims && entity.claims.P625 && entity.claims.P625[0];
+      const coord = claim && claim.mainsnak && claim.mainsnak.datavalue && claim.mainsnak.datavalue.value;
+      if (!coord) throw new Error(`${ref.id} has no coordinate location (P625) on Wikidata.`);
+      ensureSpatial();
+      state.spatial.lat = coord.latitude;
+      state.spatial.lon = coord.longitude;
+      document.getElementById('field-spatial-lat').value = coord.latitude.toFixed(6);
+      document.getElementById('field-spatial-lon').value = coord.longitude.toFixed(6);
+      syncMapMarker();
+      statusEl.textContent = `Set from Wikidata ${ref.id} (P625 coordinate location).`;
+      statusEl.className = 'hint ok-item';
+    } else {
+      const prefix = { node: 'N', way: 'W', relation: 'R' }[ref.type];
+      const url = `https://nominatim.openstreetmap.org/lookup?osm_ids=${prefix}${ref.id}&format=jsonv2`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const results = await res.json();
+      const hit = results && results[0];
+      if (!hit) throw new Error(`OpenStreetMap ${ref.type}/${ref.id} not found via Nominatim.`);
+      ensureSpatial();
+      state.spatial.lat = Number(hit.lat);
+      state.spatial.lon = Number(hit.lon);
+      document.getElementById('field-spatial-lat').value = state.spatial.lat.toFixed(6);
+      document.getElementById('field-spatial-lon').value = state.spatial.lon.toFixed(6);
+      let bboxNote = '';
+      if (Array.isArray(hit.boundingbox) && hit.boundingbox.length === 4) {
+        const [s, n, w, e] = hit.boundingbox.map(Number);
+        state.spatial.bbox_w = w; state.spatial.bbox_s = s; state.spatial.bbox_e = e; state.spatial.bbox_n = n;
+        document.getElementById('field-spatial-bbox-w').value = w.toFixed(6);
+        document.getElementById('field-spatial-bbox-s').value = s.toFixed(6);
+        document.getElementById('field-spatial-bbox-e').value = e.toFixed(6);
+        document.getElementById('field-spatial-bbox-n').value = n.toFixed(6);
+        syncMapRectangle();
+        bboxNote = ' and bounding box';
+      }
+      syncMapMarker();
+      statusEl.textContent = `Set from OpenStreetMap ${ref.type}/${ref.id} (Nominatim) — point${bboxNote}.`;
+      statusEl.className = 'hint ok-item';
+    }
+    scheduleValidate(); scheduleAutosave();
+  } catch (err) {
+    statusEl.textContent = `Lookup failed: ${err.message}`;
+    statusEl.className = 'hint warn-item';
+  }
 }
 
 function wireTemporalFields() {
@@ -633,7 +719,6 @@ function wireTemporalFields() {
     const el = document.getElementById(id);
     el.addEventListener('input', () => { ensureTemporal()[prop] = transform(el.value); scheduleValidate(); scheduleAutosave(); });
   });
-  wireIdNormalize(document.getElementById('field-temporal-id'), v => { ensureTemporal().id = v; });
 }
 
 function wireHeritageFields() {

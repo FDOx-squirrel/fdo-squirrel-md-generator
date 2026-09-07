@@ -293,6 +293,10 @@ input.field-invalid, textarea.field-invalid, select.field-invalid {
 .map-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.6rem 0; }
 .map-controls .add-btn { margin-top: 0; }
 
+.id-lookup-row { display: flex; gap: 0.5rem; align-items: stretch; }
+.id-lookup-row input { flex: 1; }
+.id-lookup-row .add-btn { flex: none; margin-top: 0; white-space: nowrap; }
+
 details summary { cursor: pointer; font-size: 0.86rem; color: var(--ink-soft); margin-top: 0.6rem; }
 
 /* ---------- map ---------- */

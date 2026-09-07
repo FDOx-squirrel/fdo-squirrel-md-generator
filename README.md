@@ -36,8 +36,11 @@ account — open the page, fill in a form, download a schema-valid `MD.cff`.
 Everything happens in your browser. The only network requests this page
 makes are: the two schema fetches (`fdo-squirrel`'s `MD.cff-schema.yaml`,
 same-origin copies of the vendored CFF schema and classification rules),
-the four pinned CDN libraries, and OpenStreetMap tiles if you open the map.
-Nothing you type or drop onto the page is sent anywhere.
+the four pinned CDN libraries, OpenStreetMap tiles if you open the map, and
+— only when you press "look up coordinates" next to the Spatial extent
+Identifier field — one request to either Wikidata's or OpenStreetMap's
+(Nominatim) public API, to fetch that entity's coordinates. Nothing you
+type or drop onto the page is sent anywhere otherwise.
 
 ## Using it
 

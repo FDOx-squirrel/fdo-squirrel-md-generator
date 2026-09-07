@@ -261,6 +261,37 @@ eindeutig):
   von hier aus nicht erweiterbar; "wikidata"/"osm" passen semantisch auch
   eher zu Entitäten/Orten als zu Identifiern der Ressource selbst.
 
+### A8 Nachtrag 2026-09-07, dritte Runde (Anzeige/Export getrennt + Koordinaten-Lookup)
+
+- **Kurzform bleibt im Formular sichtbar, nur die exportierte Datei
+  bekommt die Langform.** A6/A7 haben das Feld selbst beim Verlassen
+  umgeschrieben (Q42 → volle URL, sichtbar im Input) — das wollte Flo
+  nicht ("nur im file selbst"). Jetzt sauber getrennt:
+  `shortenEntityId()` (Langform → Kurzform) läuft ausschließlich beim
+  **Rendern** eines gespeicherten Werts in ein Input-Feld (egal ob der
+  Wert vom Nutzer getippt oder aus einer geladenen `MD.cff` mit bereits
+  voller URL stammt); `normalizeEntityId()` (Kurzform → Langform) läuft
+  ausschließlich in `cleanEntity()`/`cleanSpatial()`/`cleanTemporal()`,
+  also nur beim Bauen des Export-Objekts. Der interne State selbst bleibt
+  unangetastet (genau das, was getippt/geladen wurde) — beide Funktionen
+  sind reine Anzeige- bzw. Export-Transformationen, keine State-Mutation.
+- **Koordinaten-Lookup** (Flos Idee, zweite Nachricht): Button "look up
+  coordinates" neben dem Spatial-Identifier-Feld. Erkennt Wikidata-QID
+  oder OSM-node/way/relation-Referenz (`parseWikidataOrOsmRef()`, auch aus
+  bereits voller URL), holt bei Wikidata die Koordinate über
+  `P625` (`wbgetentities`-API, `origin=*` für CORS), bei OSM über
+  Nominatims `/lookup`-Endpunkt (liefert bei way/relation zusätzlich eine
+  Bounding Box, wird gleich mit übernommen). Bewusst ein **Button, kein
+  automatischer Fetch bei jedem Tastenanschlag/Blur** — sonst Netzlast bei
+  jedem Zwischenstand, und würde der bisherigen "nichts verlässt den
+  Browser ungefragt"-Linie widersprechen (README aktualisiert: dieser
+  einzelne, nutzerausgelöste Request ist jetzt dort benannt).
+- **Temporal/Chronontology bewusst nicht umgesetzt** — Flos eigener
+  Hinweis ("etwas schwieriger") trifft es: anders als bei Wikidata/OSM
+  gibt es keine 1:1-ID→Koordinate-Auflösung, sondern eine Perioden-Suche
+  mit Namensmehrdeutigkeit und uneinheitlichen Datumskonventionen
+  (BCE/CE, Kalenderreform-Fragen). Als Teil-D-Punkt vorgemerkt.
+
 ## Teil D — Offene Punkte
 
 - **Tiefes Feld-Highlighting** für Array-Elemente (z. B. `publishers[2].label`)
@@ -277,3 +308,8 @@ eindeutig):
   ein Repo pro Chat/Patch).
 - **Browser-Verifikation** (Teil B) ist der wichtigste offene Punkt vor
   einem echten Release.
+- **Chronontology-API für Temporal** (Flos Idee, A8): Periodennamen gegen
+  https://chronontology.dainst.org/api/data/period/search auflösen, um
+  `start`/`end`/`range` vorzuschlagen. Schwieriger als der Spatial-Fall
+  (Namensmehrdeutigkeit, Datumskonventionen) — bewusst nicht in dieser
+  Runde umgesetzt, siehe A8.
