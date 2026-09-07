@@ -354,6 +354,20 @@ eindeutig):
   `fdo-squirrel`s Aufgabe) — vorher stand das nur unten im Report selbst,
   jetzt zusätzlich vorab sichtbar, bevor überhaupt eine Datei fällt.
 
+### A11 Nachtrag 2026-09-07, sechste Runde (Doku-Drift-Fix + Live-URL bestätigt)
+
+- **Bbox-Hinweistext war stehengeblieben.** Der statische Hinweis unter der
+  Karte sagte noch "then two clicks (opposite corners) sets the bounding
+  box" — Rest der Seite (Button-Text, tatsächliches Verhalten) ist seit A7
+  auf Drag-Zeichnen umgestellt, nur dieser eine Satz wurde beim damaligen
+  Patch übersehen. Gefunden beim Gegenlesen der live gefetchten Seite
+  (siehe unten), kein von Flo gemeldeter Bug. Text jetzt: "then
+  press-and-drag sets the bounding box".
+- **Live-URL bestätigt:** `https://fdox-squirrel.github.io/fdo-squirrel-md-generator/`
+  — Flo hat sie direkt mitgeteilt, zusätzlich per `web_fetch` gegengeprüft
+  (Inhalt entspricht dem Build, s. o.). `README.md`s "Live:"-Zeile von
+  "once deployed, ..." auf die bestätigte URL aktualisiert.
+
 ## Teil D — Offene Punkte
 
 - **Tiefes Feld-Highlighting** für Array-Elemente (z. B. `publishers[2].label`)

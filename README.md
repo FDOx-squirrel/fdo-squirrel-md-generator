@@ -5,7 +5,7 @@ A static, browser-only editor for `MD.cff` and `CITATION.cff` in the
 tools for FAIR Digital Objects. No server, no build step at runtime, no
 account — open the page, fill in a form, download a schema-valid `MD.cff`.
 
-**Live:** once deployed, `https://fdox-squirrel.github.io/fdo-squirrel-md-generator/`
+**Live:** <https://fdox-squirrel.github.io/fdo-squirrel-md-generator/>
 (see [Deploying](#deploying) below).
 
 ## What it does
