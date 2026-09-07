@@ -320,6 +320,37 @@ eindeutig):
   Lookup-Fetches (Konsistenz mit den Schema-Fetches, schließt
   Browser-HTTP-Caching als weitere mögliche Teilursache aus).
 
+### A10 Nachtrag 2026-09-07, fünfte Runde (Punkt/Bbox exklusiv, Wikidata-Bbox, ZIP-Validator-Doku)
+
+- **Punkt und Bbox löschen sich jetzt gegenseitig beim interaktiven
+  Setzen.** Gemeldet: eine alte Bbox blieb stehen, nachdem per Lookup oder
+  "set marker" nur ein neuer Punkt gesetzt wurde (Screenshot zeigte
+  sichtbar die alten Govan-Bbox-Werte nach einem Limburgerhof-Lookup).
+  Zwei neue geteilte Helfer `clearMapPoint()`/`clearMapBbox()` (auch von
+  den expliziten "clear point"/"clear bounding box"-Buttons genutzt, für
+  eine einzige Stelle mit dieser Logik): `onMapClick` (Punkt per Klick)
+  ruft jetzt `clearMapBbox()`, `onBboxMouseUp` (Bbox per Drag) ruft
+  `clearMapPoint()`, `lookupSpatialCoordinates()` räumt die jeweils nicht
+  gelieferte Geometrie ebenfalls ab, statt sie stehen zu lassen.
+- **Wikidata-Bounding-Box** (Flo: "aus wikidata bekommst du ggf. auch eine
+  bbox"): `P1332`/`P1333`/`P1334`/`P1335` ("coordinates of the
+  north-/south-/east-/west-most point") werden zusätzlich zu `P625`
+  abgefragt; nur wenn alle vier vorhanden sind, wird eine Bbox gesetzt
+  (eine unvollständige Box wäre still falsch, nicht nur unvollständig) —
+  sonst bleibt es beim Punkt (und eine evtl. vorhandene alte Bbox wird
+  laut obigem Punkt gelöscht).
+- **ZIP-Validator bestätigt funktionsfähig** (Flo hat ein echtes
+  `fdo-3d-packager`-Bundle geladen, alle 30 Dateien korrekt klassifiziert,
+  "Load into form" funktioniert) — auf Nachfrage: ja, das ist bewusst als
+  eigenständiger "Bundle-Validator" nutzbar, nicht nur als Vorstufe zum
+  Formular. Auf Wunsch ausgebaut: ein `<details>`-Block direkt unter der
+  Dropzone ("What does dropping a bundle .zip actually check?"), der die
+  vier Prüfschritte (Layout/Schema/Rollen/Checksummen) auflistet, ein
+  Beispiel für eine Fehlerzeile zeigt, und nochmal explizit sagt, was
+  **nicht** geprüft wird (die RDF/SHACL-Konformanzprüfung bleibt
+  `fdo-squirrel`s Aufgabe) — vorher stand das nur unten im Report selbst,
+  jetzt zusätzlich vorab sichtbar, bevor überhaupt eine Datei fällt.
+
 ## Teil D — Offene Punkte
 
 - **Tiefes Feld-Highlighting** für Array-Elemente (z. B. `publishers[2].label`)

@@ -624,21 +624,14 @@ function wireSpatialFields() {
     if (markerDrawArmed) disarmMarkerDraw(); else armMarkerDraw();
   });
   document.getElementById('marker-clear').addEventListener('click', () => {
-    ensureSpatial();
-    state.spatial.lat = null; state.spatial.lon = null;
-    document.getElementById('field-spatial-lat').value = '';
-    document.getElementById('field-spatial-lon').value = '';
-    syncMapMarker();
+    clearMapPoint();
     scheduleValidate(); scheduleAutosave();
   });
   document.getElementById('bbox-draw-toggle').addEventListener('click', () => {
     if (bboxDrawArmed) disarmBboxDraw(); else armBboxDraw();
   });
   document.getElementById('bbox-clear').addEventListener('click', () => {
-    ensureSpatial();
-    ['bbox_w', 'bbox_s', 'bbox_e', 'bbox_n'].forEach(k => { state.spatial[k] = null; });
-    ['w', 's', 'e', 'n'].forEach(dir => { document.getElementById(`field-spatial-bbox-${dir}`).value = ''; });
-    clearMapRectangle();
+    clearMapBbox();
     scheduleValidate(); scheduleAutosave();
   });
 
@@ -662,6 +655,22 @@ function wireSpatialFields() {
 // result"). Every call gets its own token; a response is only applied if
 // no newer lookup has started since.
 let coordLookupToken = 0;
+
+// Wikidata's P1332/P1333/P1334/P1335 ("coordinates of the north-/south-/
+// east-/west-most point") together describe an item's extent as a
+// bounding box, separately from P625's single point -- feedback
+// 2026-09-07. Each is a coordinate-shaped claim just like P625; only the
+// relevant axis of each is used. Returns null unless all four are present
+// -- a partial box would be silently wrong, not just incomplete.
+function extractWikidataBbox(entity) {
+  const at = (prop) => {
+    const claim = entity && entity.claims && entity.claims[prop] && entity.claims[prop][0];
+    return claim && claim.mainsnak && claim.mainsnak.datavalue && claim.mainsnak.datavalue.value;
+  };
+  const north = at('P1332'), south = at('P1333'), east = at('P1334'), west = at('P1335');
+  if (!(north && south && east && west)) return null;
+  return { n: north.latitude, s: south.latitude, e: east.longitude, w: west.longitude };
+}
 
 async function lookupSpatialCoordinates() {
   const myToken = ++coordLookupToken;
@@ -692,8 +701,28 @@ async function lookupSpatialCoordinates() {
       state.spatial.lon = coord.longitude;
       document.getElementById('field-spatial-lat').value = coord.latitude.toFixed(6);
       document.getElementById('field-spatial-lon').value = coord.longitude.toFixed(6);
+      // Some (mostly larger/administrative) Wikidata items also carry an
+      // extent via P1332-P1335 (coordinates of the north/south/east/west-
+      // most point) -- feedback 2026-09-07 ("from wikidata you might also
+      // get a bbox"). Use it when all four are present, otherwise this
+      // lookup is point-only and should replace any earlier bbox, not
+      // leave it stale (same "clear the other one" reasoning as the
+      // map-drawing actions above).
+      const bbox = extractWikidataBbox(entity);
+      let bboxNote = '';
+      if (bbox) {
+        state.spatial.bbox_w = bbox.w; state.spatial.bbox_s = bbox.s; state.spatial.bbox_e = bbox.e; state.spatial.bbox_n = bbox.n;
+        document.getElementById('field-spatial-bbox-w').value = bbox.w.toFixed(6);
+        document.getElementById('field-spatial-bbox-s').value = bbox.s.toFixed(6);
+        document.getElementById('field-spatial-bbox-e').value = bbox.e.toFixed(6);
+        document.getElementById('field-spatial-bbox-n').value = bbox.n.toFixed(6);
+        syncMapRectangle();
+        bboxNote = ' and bounding box (P1332–P1335)';
+      } else {
+        clearMapBbox();
+      }
       syncMapMarker();
-      statusEl.textContent = `Set from Wikidata ${ref.id} (P625 coordinate location).`;
+      statusEl.textContent = `Set from Wikidata ${ref.id} (P625 coordinate location${bboxNote}).`;
       statusEl.className = 'hint ok-item';
     } else {
       const prefix = { node: 'N', way: 'W', relation: 'R' }[ref.type];
@@ -720,6 +749,8 @@ async function lookupSpatialCoordinates() {
         document.getElementById('field-spatial-bbox-n').value = n.toFixed(6);
         syncMapRectangle();
         bboxNote = ' and bounding box';
+      } else {
+        clearMapBbox();
       }
       syncMapMarker();
       statusEl.textContent = `Set from OpenStreetMap ${ref.type}/${ref.id} (Nominatim) — point${bboxNote}.`;
@@ -858,6 +889,10 @@ function onMapClick(e) {
   state.spatial.lon = e.latlng.lng;
   document.getElementById('field-spatial-lat').value = state.spatial.lat.toFixed(6);
   document.getElementById('field-spatial-lon').value = state.spatial.lon.toFixed(6);
+  // Setting a point this way replaces any earlier bounding box rather than
+  // adding to it (feedback 2026-09-07: a stale bbox from an earlier
+  // lookup/drawing was left behind after setting just a point).
+  clearMapBbox();
   syncMapMarker();
   disarmMarkerDraw();
   scheduleValidate(); scheduleAutosave();
@@ -931,6 +966,9 @@ function onBboxMouseUp(e) {
   document.getElementById('field-spatial-bbox-s').value = state.spatial.bbox_s.toFixed(6);
   document.getElementById('field-spatial-bbox-e').value = state.spatial.bbox_e.toFixed(6);
   document.getElementById('field-spatial-bbox-n').value = state.spatial.bbox_n.toFixed(6);
+  // Symmetric with onMapClick above: drawing a bbox this way replaces any
+  // earlier point rather than leaving it behind.
+  clearMapPoint();
   syncMapRectangle();
   disarmBboxDraw();
   scheduleValidate(); scheduleAutosave();
@@ -978,6 +1016,34 @@ function syncMapRectangle() {
 
 function clearMapRectangle() {
   if (rectangle) { map.removeLayer(rectangle); rectangle = null; }
+}
+
+// A spatial extent is treated as either a point or a bounding box at any
+// given moment when drawn/looked-up interactively (feedback 2026-09-07:
+// setting a new point via a click, or a new bbox via a drag, left the
+// *other* one over from an earlier lookup/drawing). Explicit "clear
+// point"/"clear bounding box" buttons already only ever touched their own
+// half; these two helpers are what both those buttons and every
+// point/bbox-setting action below now share, so the "clear the other one"
+// behaviour lives in exactly one place.
+function clearMapPoint() {
+  ensureSpatial();
+  state.spatial.lat = null; state.spatial.lon = null;
+  const latEl = document.getElementById('field-spatial-lat');
+  const lonEl = document.getElementById('field-spatial-lon');
+  if (latEl) latEl.value = '';
+  if (lonEl) lonEl.value = '';
+  syncMapMarker();
+}
+
+function clearMapBbox() {
+  ensureSpatial();
+  ['bbox_w', 'bbox_s', 'bbox_e', 'bbox_n'].forEach(k => { state.spatial[k] = null; });
+  ['w', 's', 'e', 'n'].forEach(dir => {
+    const el = document.getElementById(`field-spatial-bbox-${dir}`);
+    if (el) el.value = '';
+  });
+  clearMapRectangle();
 }
 
 // ---------------------------------------------------------------------

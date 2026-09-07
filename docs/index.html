@@ -46,6 +46,20 @@
         <span>or choose a file…</span>
         <input type="file" id="file-input" accept=".yaml,.yml,.cff,.zip">
       </label>
+      <details class="zip-check-info">
+        <summary>What does dropping a bundle .zip actually check?</summary>
+        <div class="zip-check-info-body">
+          <p>Four structural/schema checks, entirely in this browser, in this order:</p>
+          <ul>
+            <li><strong>Layout</strong> — <code>MD.cff</code> and <code>CITATION.cff</code> must sit at the ZIP's root (not in a subfolder); <code>fdo-squirrel</code> looks for them by exact root filename.</li>
+            <li><strong>Schema validity</strong> — both are validated against the exact same live/vendored schemas this form itself validates against.</li>
+            <li><strong>File roles</strong> — every file in the ZIP gets classified (<code>model</code>, <code>data</code>, <code>documentation</code>, <code>metadata</code>, <code>auxiliary</code>, or <code>unclassified</code>) using the same rules <code>fdo-squirrel</code> uses, so you can spot a misplaced or unexpected file at a glance.</li>
+            <li><strong>Checksums</strong> — a SHA-256 is computed for every file and cross-checked against <code>MD.cff</code>'s <code>distributions[]</code> checksums, if it lists any.</li>
+          </ul>
+          <p>An error looks like a short, specific line, e.g. <code>No MD.cff at the ZIP root</code>, <code>MD.cff: /title: missing required field "title"</code>, or <code>distributions[] entry "model.nxz": checksum mismatch (MD.cff says …, ZIP contains …)</code>. Warnings (e.g. a missing <code>CITATION.cff</code>, or a file that couldn't be classified) are shown separately and don't block the "load into form" option below the report.</p>
+          <p><strong>Not covered:</strong> this is a fast structural pre-check, not <code>fdo-squirrel</code>'s own RDF/SHACL conformance check on actual ingest — a ZIP passing every check here can still fail that later step, and a ZIP failing here would also fail there.</p>
+        </div>
+      </details>
     </div>
   </section>
 
