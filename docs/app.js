@@ -30,14 +30,18 @@ console.info(`fdo-squirrel-md-generator ${RELEASE}`);
 
 // Leaflet's own auto-detection of its default marker icon images (scanning
 // loaded stylesheets for "leaflet.css") is unreliable via CDN in practice
-// -- pin explicitly instead of debugging the heuristic (feedback 2026-09-07:
-// markers rendered invisible).
+// -- pin explicitly instead of debugging the heuristic (feedback
+// 2026-09-07: markers rendered invisible). IMPORTANT: Icon.Default's own
+// _getIconUrl ALWAYS prepends `imagePath` in front of iconUrl/
+// iconRetinaUrl/shadowUrl (they're meant to be bare filenames, e.g. its
+// own default 'marker-icon.png') -- setting those three to already-full
+// URLs, as a first attempt here did, makes Leaflet concatenate its
+// detected base path with a second full URL, producing a malformed
+// request (confirmed in the browser console, 2026-09-07). Setting only
+// `imagePath` and leaving the three *Url options at Leaflet's own
+// (correct, relative) defaults is the actual fix.
 if (window.L) {
-  window.L.Icon.Default.mergeOptions({
-    iconRetinaUrl: `${LEAFLET_IMAGES_BASE_URL}/marker-icon-2x.png`,
-    iconUrl: `${LEAFLET_IMAGES_BASE_URL}/marker-icon.png`,
-    shadowUrl: `${LEAFLET_IMAGES_BASE_URL}/marker-shadow.png`,
-  });
+  window.L.Icon.Default.mergeOptions({ imagePath: `${LEAFLET_IMAGES_BASE_URL}/` });
 }
 
 const ENUMS = {
@@ -93,8 +97,8 @@ let cffSchema = null, cffValidator = null;
 let classificationRules = null;
 
 let map = null, marker = null, rectangle = null;
-let bboxDrawArmed = false, bboxFirstCorner = null;
 let markerDrawArmed = false;
+let bboxDrawArmed = false, bboxDragStart = null, bboxPreviewRect = null;
 
 let validateTimer = null;
 let autosaveTimer = null;
@@ -137,6 +141,32 @@ function parseBboxString(str) {
 
 function looksLikeSpdx(v) {
   return !!v && /^[A-Za-z][A-Za-z0-9]*([.+-][A-Za-z0-9]+)*$/.test(v) && !v.toUpperCase().startsWith('TODO');
+}
+
+// Shorthand recognition for `id` fields throughout the form: a bare
+// Wikidata QID or an OSM "node/way/relation/<id>" reference gets expanded
+// into its full URI. Applied on blur (not on every keystroke) so it
+// doesn't fight typing, in wireIdNormalize() below. Anything else is left
+// untouched -- this only ever adds a scheme+host, never rewrites or
+// "corrects" something that isn't one of these two exact shapes.
+function normalizeEntityId(raw) {
+  const v = (raw || '').trim();
+  if (!v) return v;
+  if (/^Q[1-9]\d*$/.test(v)) return `https://www.wikidata.org/wiki/${v}`;
+  const osm = v.match(/^(node|way|relation)\/(\d+)$/i);
+  if (osm) return `https://www.openstreetmap.org/${osm[1].toLowerCase()}/${osm[2]}`;
+  return v;
+}
+
+function wireIdNormalize(inputEl, onCommit) {
+  inputEl.addEventListener('blur', () => {
+    const normalized = normalizeEntityId(inputEl.value);
+    if (normalized !== inputEl.value) {
+      inputEl.value = normalized;
+      onCommit(normalized);
+      scheduleValidate(); scheduleAutosave();
+    }
+  });
 }
 
 async function sha256Hex(bytes) {
@@ -311,6 +341,7 @@ function renderEntityList(key) {
     const [labelInput, idInput] = row.querySelectorAll('input');
     labelInput.addEventListener('input', () => { item.label = labelInput.value; scheduleValidate(); scheduleAutosave(); });
     idInput.addEventListener('input', () => { item.id = idInput.value; scheduleValidate(); scheduleAutosave(); });
+    wireIdNormalize(idInput, v => { item.id = v; });
     row.querySelector('.row-remove').addEventListener('click', () => {
       arr.splice(i, 1); renderEntityList(key); scheduleValidate(); scheduleAutosave();
     });
@@ -337,6 +368,7 @@ function renderEntitySingle(key) {
   const [labelInput, idInput] = container.querySelectorAll('input');
   labelInput.addEventListener('input', () => { item.label = labelInput.value; scheduleValidate(); scheduleAutosave(); });
   idInput.addEventListener('input', () => { item.id = idInput.value; scheduleValidate(); scheduleAutosave(); });
+  wireIdNormalize(idInput, v => { item.id = v; });
   container.querySelector('.row-remove').addEventListener('click', () => {
     item.label = ''; item.id = ''; labelInput.value = ''; idInput.value = '';
     scheduleValidate(); scheduleAutosave();
@@ -411,6 +443,7 @@ function renderRelatedList() {
     select.addEventListener('change', () => { item.relation = select.value; scheduleValidate(); scheduleAutosave(); });
     targetLabel.addEventListener('input', () => { item.target.label = targetLabel.value; scheduleValidate(); scheduleAutosave(); });
     targetId.addEventListener('input', () => { item.target.id = targetId.value; scheduleValidate(); scheduleAutosave(); });
+    wireIdNormalize(targetId, v => { item.target.id = v; });
     note.addEventListener('input', () => { item.note = note.value; scheduleValidate(); scheduleAutosave(); });
     row.querySelector('.row-remove').addEventListener('click', () => {
       arr.splice(i, 1); renderRelatedList(); scheduleValidate(); scheduleAutosave();
@@ -552,6 +585,7 @@ function wireSpatialFields() {
       scheduleValidate(); scheduleAutosave();
     });
   });
+  wireIdNormalize(document.getElementById('field-spatial-id'), v => { ensureSpatial().id = v; });
 
   const latEl = document.getElementById('field-spatial-lat');
   const lonEl = document.getElementById('field-spatial-lon');
@@ -599,6 +633,7 @@ function wireTemporalFields() {
     const el = document.getElementById(id);
     el.addEventListener('input', () => { ensureTemporal()[prop] = transform(el.value); scheduleValidate(); scheduleAutosave(); });
   });
+  wireIdNormalize(document.getElementById('field-temporal-id'), v => { ensureTemporal().id = v; });
 }
 
 function wireHeritageFields() {
@@ -691,9 +726,12 @@ function initMapIfNeeded() {
   if (map) { requestAnimationFrame(() => map.invalidateSize()); return; }
   const container = document.getElementById('map-spatial');
   if (!container || !window.L) return;
-  // Centred on Ireland by default -- the family's real test data
-  // (Anne-Karoline's photogrammetry models) is Irish heritage sites.
-  map = window.L.map(container).setView([53.4, -8.0], 6);
+  // Whole-world view by default (feedback 2026-09-07) -- the Ireland
+  // centring was too presumptuous as a *starting* point even though the
+  // family's real test data (Anne-Karoline's photogrammetry models) is
+  // Irish heritage sites; zooming/panning to loaded or typed coordinates
+  // happens in syncMapMarker()/syncMapRectangle() regardless.
+  map = window.L.map(container).setView([20, 0], 2);
   window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
@@ -705,38 +743,15 @@ function initMapIfNeeded() {
 }
 
 function onMapClick(e) {
-  if (markerDrawArmed) {
-    ensureSpatial();
-    state.spatial.lat = e.latlng.lat;
-    state.spatial.lon = e.latlng.lng;
-    document.getElementById('field-spatial-lat').value = state.spatial.lat.toFixed(6);
-    document.getElementById('field-spatial-lon').value = state.spatial.lon.toFixed(6);
-    syncMapMarker();
-    disarmMarkerDraw();
-    scheduleValidate(); scheduleAutosave();
-    return;
-  }
-  if (bboxDrawArmed) {
-    if (!bboxFirstCorner) { bboxFirstCorner = e.latlng; return; }
-    const a = bboxFirstCorner, b = e.latlng;
-    ensureSpatial();
-    state.spatial.bbox_w = Math.min(a.lng, b.lng);
-    state.spatial.bbox_e = Math.max(a.lng, b.lng);
-    state.spatial.bbox_s = Math.min(a.lat, b.lat);
-    state.spatial.bbox_n = Math.max(a.lat, b.lat);
-    document.getElementById('field-spatial-bbox-w').value = state.spatial.bbox_w.toFixed(6);
-    document.getElementById('field-spatial-bbox-s').value = state.spatial.bbox_s.toFixed(6);
-    document.getElementById('field-spatial-bbox-e').value = state.spatial.bbox_e.toFixed(6);
-    document.getElementById('field-spatial-bbox-n').value = state.spatial.bbox_n.toFixed(6);
-    syncMapRectangle();
-    disarmBboxDraw();
-    scheduleValidate(); scheduleAutosave();
-    return;
-  }
-  // No mode armed: clicking the map does nothing (feedback 2026-09-07 --
-  // an implicit "plain click sets the point" default was confusing
-  // alongside the explicit bbox button; both actions now require pressing
-  // their own button first, symmetric and unambiguous).
+  if (!markerDrawArmed) return; // bbox is drag-based (mousedown/move/up below), not click-based
+  ensureSpatial();
+  state.spatial.lat = e.latlng.lat;
+  state.spatial.lon = e.latlng.lng;
+  document.getElementById('field-spatial-lat').value = state.spatial.lat.toFixed(6);
+  document.getElementById('field-spatial-lon').value = state.spatial.lon.toFixed(6);
+  syncMapMarker();
+  disarmMarkerDraw();
+  scheduleValidate(); scheduleAutosave();
 }
 
 function armMarkerDraw() {
@@ -752,17 +767,64 @@ function disarmMarkerDraw() {
   if (btn) { btn.textContent = 'set marker on map…'; btn.classList.remove('armed'); }
 }
 
+// Bounding box is a real click-and-drag rectangle directly on the map
+// (feedback 2026-09-07 -- an earlier two-click-corners version worked but
+// felt unnatural), using Leaflet's own mouse events rather than adding the
+// leaflet-draw plugin as a dependency for one interaction. Map panning is
+// disabled for the duration of the drag so it doesn't fight the gesture.
 function armBboxDraw() {
-  bboxDrawArmed = true; bboxFirstCorner = null;
+  if (!map) return;
+  bboxDrawArmed = true; bboxDragStart = null;
   disarmMarkerDraw();
+  map.dragging.disable();
+  map.on('mousedown', onBboxMouseDown);
   const btn = document.getElementById('bbox-draw-toggle');
-  btn.textContent = 'click two opposite corners on the map…';
+  btn.textContent = 'drag a rectangle on the map…';
   btn.classList.add('armed');
 }
 function disarmBboxDraw() {
-  bboxDrawArmed = false; bboxFirstCorner = null;
+  bboxDrawArmed = false; bboxDragStart = null;
+  if (map) {
+    map.dragging.enable();
+    map.off('mousedown', onBboxMouseDown);
+    map.off('mousemove', onBboxMouseMove);
+    map.off('mouseup', onBboxMouseUp);
+    if (bboxPreviewRect) { map.removeLayer(bboxPreviewRect); bboxPreviewRect = null; }
+  }
   const btn = document.getElementById('bbox-draw-toggle');
   if (btn) { btn.textContent = 'draw rectangle on map…'; btn.classList.remove('armed'); }
+}
+
+function onBboxMouseDown(e) {
+  bboxDragStart = e.latlng;
+  map.on('mousemove', onBboxMouseMove);
+  map.on('mouseup', onBboxMouseUp);
+  if (e.originalEvent) e.originalEvent.preventDefault();
+}
+function onBboxMouseMove(e) {
+  if (!bboxDragStart) return;
+  const bounds = window.L.latLngBounds(bboxDragStart, e.latlng);
+  if (!bboxPreviewRect) {
+    bboxPreviewRect = window.L.rectangle(bounds, { color: '#935a34', weight: 2, fillOpacity: 0.08, dashArray: '4' }).addTo(map);
+  } else {
+    bboxPreviewRect.setBounds(bounds);
+  }
+}
+function onBboxMouseUp(e) {
+  if (!bboxDragStart) return;
+  const a = bboxDragStart, b = e.latlng;
+  ensureSpatial();
+  state.spatial.bbox_w = Math.min(a.lng, b.lng);
+  state.spatial.bbox_e = Math.max(a.lng, b.lng);
+  state.spatial.bbox_s = Math.min(a.lat, b.lat);
+  state.spatial.bbox_n = Math.max(a.lat, b.lat);
+  document.getElementById('field-spatial-bbox-w').value = state.spatial.bbox_w.toFixed(6);
+  document.getElementById('field-spatial-bbox-s').value = state.spatial.bbox_s.toFixed(6);
+  document.getElementById('field-spatial-bbox-e').value = state.spatial.bbox_e.toFixed(6);
+  document.getElementById('field-spatial-bbox-n').value = state.spatial.bbox_n.toFixed(6);
+  syncMapRectangle();
+  disarmBboxDraw();
+  scheduleValidate(); scheduleAutosave();
 }
 
 function syncMapMarker() {
@@ -786,7 +848,7 @@ function syncMapMarker() {
     marker.setLatLng([lat, lon]);
   }
   // setView (not just panTo) so the point is actually visible up close --
-  // at the default zoom 6 a panTo alone barely moved the visible frame
+  // at a wide starting zoom a panTo alone barely moved the visible frame
   // (feedback 2026-09-07). Math.max keeps an already-closer zoom as is.
   map.setView([lat, lon], Math.max(map.getZoom(), 13));
 }

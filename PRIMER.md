@@ -225,6 +225,42 @@ wie gebaut. Zwei Bugs + eine Vereinfachung gemeldet und behoben:
   (S5) liest `distributions[]` weiterhin direkt aus einer geladenen ZIP für
   den Checksummen-Abgleich — das ist ein separater Lesepfad, unverändert.
 
+### A7 Nachtrag 2026-09-07, zweite Runde (Karte + Identifier-Kurzformen)
+
+Nach A6 gemeldet (mit Firefox-Konsole, Netzwerk-Tab zeigte den Fehler
+eindeutig):
+
+- **Marker-Icon-Fix aus A6 war selbst fehlerhaft.** `L.Icon.Default`s
+  `_getIconUrl` hängt `imagePath` IMMER vor `iconUrl`/`iconRetinaUrl`/
+  `shadowUrl` (die als reine Dateinamen gedacht sind, kein `/`-Trenner wird
+  von Leaflet ergänzt) — A6 hatte dort volle URLs reingesetzt, das ergab
+  doppelt zusammengesetzte, kaputte Requests
+  (`.../dist/images/https://cdn.jsdelivr.net/...`, im Netzwerk-Tab
+  bestätigt). Korrekt: nur `imagePath` setzen (mit eigenem `/` am Ende,
+  da Leaflet keinen einfügt), Rest bleibt bei Leaflets eigenen (relativen)
+  Defaults. Verifiziert per `npm pack leaflet@1.9.4` und Lesen von
+  `dist/leaflet-src.js` (Zeile ~7507) — nicht mehr geraten.
+- **Start-Zoom**: jetzt Weltkarte (`[20, 0]`, Zoom 2) statt Irland-Default —
+  Zoomen auf einen Punkt passiert weiterhin automatisch beim Setzen/Laden
+  von Koordinaten (`syncMapMarker()`/`syncMapRectangle()`).
+- **Bounding Box**: echtes Ziehen (mousedown/mousemove/mouseup direkt auf
+  der Karte, `map.dragging` währenddessen deaktiviert) statt
+  Zwei-Klick-Ecken — kein zusätzliches CDN-Paket (`leaflet-draw`) dafür,
+  reine Leaflet-Kernfunktionalität.
+- **Neu (Wunsch, nicht Bugfix): Wikidata-/OSM-Kurzformen** für alle
+  `id`-Felder im Formular (Publishers/Creators/Contributors/Keywords/
+  License/Heritage-Object-Unterfelder/Related-Resources-Target/Spatial/
+  Temporal — alles, was durch `renderEntityList()`/`renderEntitySingle()`
+  läuft, plus die beiden Sonderfälle `related_resources[].target` und
+  `spatial.id`/`temporal.id`, die eigene Render-Pfade haben). Eine bloße
+  Wikidata-Q-ID (`Q12345`) oder OSM-Referenz (`node/xyz`, `way/xyz`,
+  `relation/xyz`) wird beim Verlassen des Feldes (`blur`, nicht bei jedem
+  Tastenanschlag) zur vollen URL expandiert (`normalizeEntityId()`,
+  `wireIdNormalize()`). **Bewusst nicht** an den Top-Level-`identifiers[]`
+  gemacht — deren `scheme`-Enum kommt aus `fdo-squirrel`s Schema und ist
+  von hier aus nicht erweiterbar; "wikidata"/"osm" passen semantisch auch
+  eher zu Entitäten/Orten als zu Identifiern der Ressource selbst.
+
 ## Teil D — Offene Punkte
 
 - **Tiefes Feld-Highlighting** für Array-Elemente (z. B. `publishers[2].label`)

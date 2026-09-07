@@ -134,6 +134,7 @@
 
       <section id="section-people" class="field-section">
         <h2>People &amp; rights</h2>
+        <p class="hint">For any "id" field below: a bare Wikidata QID (e.g. <code>Q12345</code>) or an OpenStreetMap reference (<code>node/123</code>, <code>way/123</code>, <code>relation/123</code>) is expanded into its full URL automatically once you leave the field.</p>
 
         <div class="field">
           <label>Publishers <span class="required-flag">required, at least one</span></label>
@@ -195,7 +196,8 @@
             </div>
             <div class="field">
               <label for="field-spatial-id">Identifier</label>
-              <input type="text" id="field-spatial-id" placeholder="Wikidata / Geonames URI">
+              <input type="text" id="field-spatial-id" placeholder="Wikidata Q-id, OSM node/way/relation, or full URI">
+              <p class="hint">e.g. <code>Q12345</code> or <code>way/123456</code> — expanded automatically, see above.</p>
             </div>
           </div>
 
