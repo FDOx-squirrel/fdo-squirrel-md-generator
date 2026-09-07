@@ -47,6 +47,7 @@ from py.md_generator_utils import (
     DOCS,
     JS_YAML_VERSION,
     JSZIP_VERSION,
+    LEAFLET_IMAGES_CDN,
     LEAFLET_VERSION,
     MD_CFF_SCHEMA_URL,
     RELEASE,
@@ -98,6 +99,7 @@ def run(args: argparse.Namespace) -> tuple[bool, str]:
         classification_rules_path=CLASSIFICATION_RULES_DOCS_PATH,
         ajv_2020_esm_url=AJV_2020_ESM_CDN,
         ajv_draft07_esm_url=AJV_DRAFT07_ESM_CDN,
+        leaflet_images_base_url=LEAFLET_IMAGES_CDN,
     )
     write_text(rendered, DOCS / "config.js")
 

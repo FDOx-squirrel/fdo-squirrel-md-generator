@@ -288,6 +288,10 @@ input.field-invalid, textarea.field-invalid, select.field-invalid {
   margin-top: 0.3rem;
 }
 .add-btn:hover { border-color: var(--moss); background: #e6ecdf; }
+.add-btn.armed { border-style: solid; border-color: var(--rust); background: #f0e2df; color: var(--rust); }
+
+.map-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.6rem 0; }
+.map-controls .add-btn { margin-top: 0; }
 
 details summary { cursor: pointer; font-size: 0.86rem; color: var(--ink-soft); margin-top: 0.6rem; }
 

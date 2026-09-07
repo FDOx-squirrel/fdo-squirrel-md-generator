@@ -63,7 +63,6 @@
       <a href="#section-temporal">Temporal</a>
       <a href="#section-heritage">Heritage object</a>
       <a href="#section-technique">Technique</a>
-      <a href="#section-distributions">Distributions</a>
     </nav>
 
     <form id="mdcff-form" novalidate>
@@ -201,7 +200,13 @@
           </div>
 
           <div id="map-spatial" class="map"></div>
-          <p class="hint">Click the map to set the point (<code>lat</code>/<code>lon</code>). To set the bounding box instead, press "draw bounding box" below, then click two opposite corners — or just type the numbers directly. The map needs an internet connection to load its tiles even once this page is saved offline.</p>
+          <div class="map-controls">
+            <button type="button" id="marker-draw-toggle" class="add-btn">set marker on map…</button>
+            <button type="button" id="marker-clear" class="add-btn">clear point</button>
+            <button type="button" id="bbox-draw-toggle" class="add-btn">draw rectangle on map…</button>
+            <button type="button" id="bbox-clear" class="add-btn">clear bounding box</button>
+          </div>
+          <p class="hint">Nothing happens on the map until you press one of the buttons above: "set marker" then one click sets the point; "draw rectangle" then two clicks (opposite corners) sets the bounding box. Or just type the numbers below directly. The map needs an internet connection to load its tiles even once this page is saved offline.</p>
 
           <div class="field-row">
             <div class="field">
@@ -222,8 +227,6 @@
               <input type="number" step="any" id="field-spatial-bbox-e" placeholder="east" aria-label="East">
               <input type="number" step="any" id="field-spatial-bbox-n" placeholder="north" aria-label="North">
             </div>
-            <button type="button" id="bbox-draw-toggle" class="add-btn">draw bounding box on map…</button>
-            <button type="button" id="bbox-clear" class="add-btn">clear bounding box</button>
           </div>
 
           <details>
@@ -369,12 +372,6 @@
             </div>
           </div>
         </div>
-      </section>
-
-      <section id="section-distributions" class="field-section">
-        <h2>Distributions <span class="advanced-flag">advanced</span></h2>
-        <p class="hint">Usually left empty on purpose — <code>fdo-squirrel</code> computes distributions from a package's actual ZIP contents rather than reading them from <code>MD.cff</code>. This raw field exists only so that loading an <code>MD.cff</code> which already has a <code>distributions</code> list (e.g. from another producer) doesn't silently lose it — edit as YAML, a list of <code>{id, label, media_type?, checksum?}</code>.</p>
-        <textarea id="field-distributions-raw" rows="4" class="raw-yaml" placeholder="- id: model.nxz&#10;  label: Compressed Nexus mesh"></textarea>
       </section>
 
     </form>

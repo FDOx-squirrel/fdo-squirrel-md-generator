@@ -57,6 +57,12 @@ JS_YAML_CDN = f"https://cdn.jsdelivr.net/npm/js-yaml@{JS_YAML_VERSION}/dist/js-y
 JSZIP_CDN = f"https://cdn.jsdelivr.net/npm/jszip@{JSZIP_VERSION}/dist/jszip.min.js"
 LEAFLET_CSS_CDN = f"https://cdn.jsdelivr.net/npm/leaflet@{LEAFLET_VERSION}/dist/leaflet.css"
 LEAFLET_JS_CDN = f"https://cdn.jsdelivr.net/npm/leaflet@{LEAFLET_VERSION}/dist/leaflet.js"
+# Leaflet's own CSS-scanning auto-detection of its marker icon images (used
+# when no iconUrl/iconRetinaUrl/shadowUrl is set explicitly) is unreliable
+# enough via CDN in practice -- observed here 2026-09-07: default markers
+# rendered invisible. Pinning these explicitly removes that whole failure
+# mode rather than debugging the auto-detection.
+LEAFLET_IMAGES_CDN = f"https://cdn.jsdelivr.net/npm/leaflet@{LEAFLET_VERSION}/dist/images"
 # ajv 8's published npm package ships no browser UMD bundle any more (only
 # dist/2020.js as a CommonJS module -- confirmed 2026-09-07 by unpacking
 # the actual npm tarball, see PRIMER.md A1 Befund 20b). jsDelivr's `+esm`

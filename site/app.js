@@ -20,12 +20,25 @@
 import {
   RELEASE, MD_CFF_SCHEMA_URL, CITATION_CFF_SCHEMA_PATH,
   CLASSIFICATION_RULES_PATH, AJV_2020_ESM_URL, AJV_DRAFT07_ESM_URL,
+  LEAFLET_IMAGES_BASE_URL,
 } from './config.js';
 
 const yamlLib = window.jsyaml;
 const JSZipLib = window.JSZip;
 
 console.info(`fdo-squirrel-md-generator ${RELEASE}`);
+
+// Leaflet's own auto-detection of its default marker icon images (scanning
+// loaded stylesheets for "leaflet.css") is unreliable via CDN in practice
+// -- pin explicitly instead of debugging the heuristic (feedback 2026-09-07:
+// markers rendered invisible).
+if (window.L) {
+  window.L.Icon.Default.mergeOptions({
+    iconRetinaUrl: `${LEAFLET_IMAGES_BASE_URL}/marker-icon-2x.png`,
+    iconUrl: `${LEAFLET_IMAGES_BASE_URL}/marker-icon.png`,
+    shadowUrl: `${LEAFLET_IMAGES_BASE_URL}/marker-shadow.png`,
+  });
+}
 
 const ENUMS = {
   fdoType: ['fdo:SoftwareFDO', 'fdo:AnalysisFDO', 'fdo:3DDataFDO', 'fdo:RegistryFDO'],
@@ -68,7 +81,7 @@ function emptyState() {
     md_cff_version: '0.1', fdo_type: '', id: '', title: '', description: '',
     version: '', date_created: '', date_released: '', date_modified: [], funding: [],
     publishers: [], creators: [], contributors: [], license: null, keywords: [],
-    identifiers: [], related_resources: [], distributions_raw: '',
+    identifiers: [], related_resources: [],
     spatial: null, temporal: null, heritage_object: null, technique: null,
   };
 }
@@ -81,6 +94,7 @@ let classificationRules = null;
 
 let map = null, marker = null, rectangle = null;
 let bboxDrawArmed = false, bboxFirstCorner = null;
+let markerDrawArmed = false;
 
 let validateTimer = null;
 let autosaveTimer = null;
@@ -270,13 +284,6 @@ function buildCleanObject() {
 
   const funding = cleanStringListOptional(state.funding); if (funding) out.funding = funding;
 
-  if (state.distributions_raw && state.distributions_raw.trim()) {
-    try {
-      const parsed = yamlLib.load(state.distributions_raw);
-      if (Array.isArray(parsed) && parsed.length) out.distributions = parsed;
-    } catch (e) { /* surfaced separately in runValidate() */ }
-  }
-
   const spatial = cleanSpatial(state.spatial); if (spatial) out.spatial = spatial;
   const temporal = cleanTemporal(state.temporal); if (temporal) out.temporal = temporal;
   const heritage = cleanHeritage(state.heritage_object); if (heritage) out.heritage_object = heritage;
@@ -437,7 +444,6 @@ function renderCoreFormFromState() {
   document.getElementById('field-version').value = state.version || '';
   document.getElementById('field-date_created').value = state.date_created || '';
   document.getElementById('field-date_released').value = state.date_released || '';
-  document.getElementById('field-distributions-raw').value = state.distributions_raw || '';
   toggleCitationBlock();
 }
 
@@ -536,10 +542,6 @@ function wireStaticFieldListeners() {
       scheduleValidate(); scheduleAutosave();
     });
   });
-  document.getElementById('field-distributions-raw').addEventListener('input', (e) => {
-    state.distributions_raw = e.target.value;
-    scheduleValidate(); scheduleAutosave();
-  });
 }
 
 function wireSpatialFields() {
@@ -564,6 +566,17 @@ function wireSpatialFields() {
     });
   });
 
+  document.getElementById('marker-draw-toggle').addEventListener('click', () => {
+    if (markerDrawArmed) disarmMarkerDraw(); else armMarkerDraw();
+  });
+  document.getElementById('marker-clear').addEventListener('click', () => {
+    ensureSpatial();
+    state.spatial.lat = null; state.spatial.lon = null;
+    document.getElementById('field-spatial-lat').value = '';
+    document.getElementById('field-spatial-lon').value = '';
+    syncMapMarker();
+    scheduleValidate(); scheduleAutosave();
+  });
   document.getElementById('bbox-draw-toggle').addEventListener('click', () => {
     if (bboxDrawArmed) disarmBboxDraw(); else armBboxDraw();
   });
@@ -646,7 +659,7 @@ function wireToggle(checkboxId, panelId, onToggle) {
 function wireToggles() {
   wireToggle('toggle-spatial', 'spatial-fields', on => {
     if (on) { if (!state.spatial) state.spatial = newSpatial(); renderSpatialFormFromState(); initMapIfNeeded(); }
-    else { state.spatial = null; disarmBboxDraw(); }
+    else { state.spatial = null; disarmBboxDraw(); disarmMarkerDraw(); }
   });
   wireToggle('toggle-temporal', 'temporal-fields', on => {
     if (on) { if (!state.temporal) state.temporal = newTemporal(); renderTemporalFormFromState(); }
@@ -692,6 +705,17 @@ function initMapIfNeeded() {
 }
 
 function onMapClick(e) {
+  if (markerDrawArmed) {
+    ensureSpatial();
+    state.spatial.lat = e.latlng.lat;
+    state.spatial.lon = e.latlng.lng;
+    document.getElementById('field-spatial-lat').value = state.spatial.lat.toFixed(6);
+    document.getElementById('field-spatial-lon').value = state.spatial.lon.toFixed(6);
+    syncMapMarker();
+    disarmMarkerDraw();
+    scheduleValidate(); scheduleAutosave();
+    return;
+  }
   if (bboxDrawArmed) {
     if (!bboxFirstCorner) { bboxFirstCorner = e.latlng; return; }
     const a = bboxFirstCorner, b = e.latlng;
@@ -709,24 +733,36 @@ function onMapClick(e) {
     scheduleValidate(); scheduleAutosave();
     return;
   }
-  ensureSpatial();
-  state.spatial.lat = e.latlng.lat;
-  state.spatial.lon = e.latlng.lng;
-  document.getElementById('field-spatial-lat').value = state.spatial.lat.toFixed(6);
-  document.getElementById('field-spatial-lon').value = state.spatial.lon.toFixed(6);
-  syncMapMarker();
-  scheduleValidate(); scheduleAutosave();
+  // No mode armed: clicking the map does nothing (feedback 2026-09-07 --
+  // an implicit "plain click sets the point" default was confusing
+  // alongside the explicit bbox button; both actions now require pressing
+  // their own button first, symmetric and unambiguous).
+}
+
+function armMarkerDraw() {
+  markerDrawArmed = true;
+  disarmBboxDraw();
+  const btn = document.getElementById('marker-draw-toggle');
+  btn.textContent = 'click the map to set the point…';
+  btn.classList.add('armed');
+}
+function disarmMarkerDraw() {
+  markerDrawArmed = false;
+  const btn = document.getElementById('marker-draw-toggle');
+  if (btn) { btn.textContent = 'set marker on map…'; btn.classList.remove('armed'); }
 }
 
 function armBboxDraw() {
   bboxDrawArmed = true; bboxFirstCorner = null;
+  disarmMarkerDraw();
   const btn = document.getElementById('bbox-draw-toggle');
   btn.textContent = 'click two opposite corners on the map…';
+  btn.classList.add('armed');
 }
 function disarmBboxDraw() {
   bboxDrawArmed = false; bboxFirstCorner = null;
   const btn = document.getElementById('bbox-draw-toggle');
-  if (btn) btn.textContent = 'draw bounding box on map…';
+  if (btn) { btn.textContent = 'draw rectangle on map…'; btn.classList.remove('armed'); }
 }
 
 function syncMapMarker() {
@@ -749,7 +785,10 @@ function syncMapMarker() {
   } else {
     marker.setLatLng([lat, lon]);
   }
-  map.panTo([lat, lon]);
+  // setView (not just panTo) so the point is actually visible up close --
+  // at the default zoom 6 a panTo alone barely moved the visible frame
+  // (feedback 2026-09-07). Math.max keeps an already-closer zoom as is.
+  map.setView([lat, lon], Math.max(map.getZoom(), 13));
 }
 
 function syncMapRectangle() {
@@ -863,9 +902,9 @@ function populateFormFromMdCff(doc) {
       note: (r && r.note) || '',
     }))
     : [];
-  s.distributions_raw = Array.isArray(doc.distributions) && doc.distributions.length
-    ? yamlLib.dump(doc.distributions, { noRefs: true, lineWidth: 100, sortKeys: false }).trim()
-    : '';
+  // doc.distributions is deliberately not read into form state at all --
+  // fdo-squirrel computes it from a package's actual ZIP contents, this
+  // tool never edits or round-trips it (feedback 2026-09-07).
 
   if (doc.spatial) {
     const bbox = parseBboxString(doc.spatial.bounding_box);
@@ -1163,16 +1202,6 @@ function runValidate() {
   const reportEl = document.getElementById('validation-report');
   const previewEl = document.getElementById('yaml-preview');
 
-  let distributionsError = null;
-  if (state.distributions_raw && state.distributions_raw.trim()) {
-    try {
-      const parsed = yamlLib.load(state.distributions_raw);
-      if (parsed !== undefined && !Array.isArray(parsed)) distributionsError = 'Distributions (raw): must parse to a YAML list';
-    } catch (e) {
-      distributionsError = `Distributions (raw): invalid YAML — ${e.message}`;
-    }
-  }
-
   previewEl.textContent = safeDump(clean);
 
   if (!mdValidator) {
@@ -1186,7 +1215,6 @@ function runValidate() {
   markInvalidFields(errors);
 
   const items = [];
-  if (distributionsError) items.push(`<li class="error-item">${escapeHtml(distributionsError)}</li>`);
   errors.forEach(e => items.push(`<li class="error-item">${escapeHtml(friendlyMessage(e))}</li>`));
 
   reportEl.innerHTML = items.length
@@ -1294,6 +1322,7 @@ function wireButtons() {
     state = emptyState();
     try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* ignore */ }
     disarmBboxDraw();
+    disarmMarkerDraw();
     clearMapRectangle();
     if (marker && map) { map.removeLayer(marker); marker = null; }
     renderFullForm();

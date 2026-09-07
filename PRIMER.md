@@ -102,12 +102,12 @@ zip -r bundle.zip PRIMER.md main.py py/ site/ schemas/ README.md CITATION.cff re
 | Schritt | Beschreibung | Status |
 |---|---|---|
 | S1 | Repo-Skeleton, `main.py`, `step_build.py`, `md_generator_utils.py` | erledigt (2026-09-07) |
-| S2 | `site/index.html` + `app.css`: Formular für alle `MD.cff`-Felder, zweispaltiges Layout | umgesetzt, **Browser-Verifikation aussteht** |
-| S3 | `site/app.js`: State, Live-Validierung gegen `MD.cff-schema.yaml`, YAML-Export | umgesetzt, **Browser-Verifikation aussteht** |
-| S4 | Round-Trip-Laden (Drag&Drop `MD.cff`/YAML → Formular) | umgesetzt, **Browser-Verifikation aussteht** |
-| S5 | ZIP-Struktur-Validator (Drag&Drop `.zip`) | umgesetzt, **Browser-Verifikation aussteht** |
-| S6 | Karte (Spatial Extent: Punkt + Bounding Box) | umgesetzt, **Browser-Verifikation aussteht** |
-| S7 | CITATION.cff-Ableitung für `fdo:3DDataFDO` | umgesetzt, **Browser-Verifikation aussteht** |
+| S2 | `site/index.html` + `app.css`: Formular für alle `MD.cff`-Felder, zweispaltiges Layout | **im Browser bestätigt** (2026-09-07, Govan-2-Test) |
+| S3 | `site/app.js`: State, Live-Validierung gegen `MD.cff-schema.yaml`, YAML-Export | **im Browser bestätigt** (2026-09-07) |
+| S4 | Round-Trip-Laden (Drag&Drop `MD.cff`/YAML → Formular) | **im Browser bestätigt** (2026-09-07) |
+| S5 | ZIP-Struktur-Validator (Drag&Drop `.zip`) | umgesetzt, **Browser-Verifikation aussteht** (noch kein ZIP getestet, nur `MD.cff` direkt) |
+| S6 | Karte (Spatial Extent: Punkt + Bounding Box) | Bug gemeldet + gefixt (A6), **erneute Browser-Verifikation aussteht** |
+| S7 | CITATION.cff-Ableitung für `fdo:3DDataFDO` | **im Browser bestätigt** (2026-09-07) |
 | S8 | RSE-Compliance (README/LICENSE/CITATION.cff/.gitignore/requirements.txt) | erledigt (2026-09-07) |
 
 **Zu "Browser-Verifikation aussteht":** In dieser Sandbox gibt es keinen
@@ -196,6 +196,34 @@ andere → `other` mit dem ursprünglichen Schema-Namen in der Beschreibung.
 Lizenz nur übernommen, wenn Label/Id wie eine SPDX-Kennung aussieht
 (`looksLikeSpdx()`) — verhindert, dass `fdo-3d-packager`s
 `TODO`-Platzhalter versehentlich als Lizenz-String landet.
+
+### A6 Nachtrag 2026-09-07 (Feedback nach erstem Deploy)
+
+Flo hat v0.1 im echten Browser getestet (Govan-2-Stone-`MD.cff` geladen):
+Formular, Validierung, YAML-Preview und CITATION.cff-Ableitung funktionieren
+wie gebaut. Zwei Bugs + eine Vereinfachung gemeldet und behoben:
+
+- **Karte reagierte nicht auf geladene/eingegebene Koordinaten.** Ursache
+  vermutlich Leaflets CSS-Scan-Auto-Erkennung der Standard-Marker-Icons
+  (unzuverlässig via CDN) plus `panTo()` ohne Zoom (bei Zoomstufe 6 kaum
+  sichtbar). Fix: `L.Icon.Default.mergeOptions()` mit expliziten, gepinnten
+  Icon-URLs (`LEAFLET_IMAGES_BASE_URL`, neue Konstante,
+  `py/md_generator_utils.py`/`config.js.j2`), und `syncMapMarker()` nutzt
+  jetzt `setView(..., Math.max(currentZoom, 13))` statt `panTo()`.
+- **UX-Wunsch:** explizite Buttons statt implizitem Klick-Verhalten — "set
+  marker on map…" und "draw rectangle on map…" (mit "armed"-Zustand,
+  visuell markiert), beide scharf schalten einen Modus, ein Klick auf die
+  Karte ohne scharfgeschalteten Modus tut jetzt nichts (vorher: einfacher
+  Klick setzte implizit immer den Punkt — das kollidierte gedanklich mit
+  dem expliziten Bbox-Button und war laut Feedback verwirrend).
+- **Distributions-Sektion komplett entfernt** (Formularfeld + State +
+  Roundtrip-Erhalt) — Flo: "das sollte ja automatisch passieren". Ein
+  geladenes `MD.cff` mit vorhandenem `distributions[]` verliert das beim
+  erneuten Export aus diesem Tool jetzt einfach (`fdo-squirrel` berechnet
+  es ohnehin aus dem tatsächlichen ZIP-Inhalt neu, A4 D7-Nachbarentscheidung
+  — dieses Tool muss es also nicht mehr durchschleifen). Der ZIP-Validator
+  (S5) liest `distributions[]` weiterhin direkt aus einer geladenen ZIP für
+  den Checksummen-Abgleich — das ist ein separater Lesepfad, unverändert.
 
 ## Teil D — Offene Punkte
 

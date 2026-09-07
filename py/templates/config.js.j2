@@ -23,3 +23,7 @@ export const CLASSIFICATION_RULES_PATH = "{{ classification_rules_path }}";
 // CITATION.cff (vendored, CFF 1.2.0) is draft-07 -- one Ajv class each.
 export const AJV_2020_ESM_URL = "{{ ajv_2020_esm_url }}";
 export const AJV_DRAFT07_ESM_URL = "{{ ajv_draft07_esm_url }}";
+
+// Explicit marker icon URLs (py/md_generator_utils.py has the reasoning --
+// Leaflet's own CDN auto-detection of these was unreliable in practice).
+export const LEAFLET_IMAGES_BASE_URL = "{{ leaflet_images_base_url }}";
